@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Diárias v3</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f2ee;--bg2:#ece9e1;--card:#ffffff;--border:#dedad1;
+  --text:#1c1a17;--text2:#7a7670;--accent:#d95f2b;--a2:#2b5fd9;--a3:#27a551;
+  --warn:#d9922b;--danger:#d92b2b;
+  --sh:0 1px 8px rgba(0,0,0,.07);--shlg:0 8px 32px rgba(0,0,0,.13);
+  --r:12px;--rs:8px;--font:'Syne',sans-serif;--mono:'DM Mono',monospace;
+  --tr:.18s ease;--sw:248px;
+}
+[data-theme=dark]{
+  --bg:#12110e;--bg2:#1c1b17;--card:#232118;--border:#35332c;
+  --text:#f0ede5;--text2:#888278;
+  --sh:0 1px 8px rgba(0,0,0,.4);--shlg:0 8px 32px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;transition:background var(--tr),color var(--tr)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── LOGIN ── */
+#login-screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:9999}
+.lbox{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:44px;width:370px;box-shadow:var(--shlg);animation:fadeUp .4s ease}
+.llogo{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.llogo-ic{width:42px;height:42px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800;flex-shrink:0}
+.llogo-tx{font-size:17px;font-weight:800;line-height:1.2}
+.llogo-tx span{display:block;font-size:10px;color:var(--text2);font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;font-weight:400}
+
+/* ── FORMS ── */
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:10px;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-family:var(--mono)}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:var(--rs);font-family:var(--font);font-size:13px;background:var(--bg);color:var(--text);outline:none;transition:border-color var(--tr)}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent)}
+.fg textarea{resize:vertical;min-height:80px}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:var(--rs);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all var(--tr);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.bp{background:var(--accent);color:#fff}.bp:hover{background:#c04d1e;transform:translateY(-1px)}
+.bs{background:var(--bg2);color:var(--text);border:1px solid var(--border)}.bs:hover{border-color:var(--accent)}
+.bg{background:var(--a3);color:#fff}.bg:hover{background:#1f8f43}
+.bd{background:var(--danger);color:#fff}
+.bw{background:var(--warn);color:#fff}
+.bsm{padding:5px 11px;font-size:10px}
+.bfull{width:100%;justify-content:center}
+.bic{padding:6px 9px;border-radius:7px}
+#login-error{color:var(--danger);font-size:11px;margin-top:8px;font-family:var(--mono);display:none}
+
+/* ── LAYOUT ── */
+#app{display:none;min-height:100vh}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sw);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;transition:transform var(--tr)}
+.sbh{padding:18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sblogo{width:34px;height:34px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;font-weight:800;flex-shrink:0}
+.sbtit{font-size:13px;font-weight:800;line-height:1.2}
+.sbtit span{display:block;font-size:9px;color:var(--text2);font-family:var(--mono);font-weight:400}
+.sbnav{flex:1;padding:10px 8px;overflow-y:auto}
+.nvsec{margin-bottom:18px}
+.nvlbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);font-family:var(--mono);padding:0 8px;margin-bottom:5px}
+.nvi{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:var(--rs);cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);transition:all var(--tr);margin-bottom:1px}
+.nvi:hover{background:var(--bg2);color:var(--text)}.nvi.active{background:var(--accent);color:#fff}
+.nvi .ic{font-size:15px;width:19px;text-align:center}
+.sbft{padding:14px;border-top:1px solid var(--border)}
+.uinfo{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.uav{width:30px;height:30px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+.unm{font-size:12px;font-weight:700}.url{font-size:9px;color:var(--text2);font-family:var(--mono);text-transform:uppercase}
+.rtdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--a3);margin-right:4px;animation:pulse 2s infinite}
+.rts{font-size:10px;color:var(--text2);font-family:var(--mono);display:flex;align-items:center;margin-bottom:9px}
+.main{margin-left:var(--sw);min-height:100vh}
+.topbar{position:sticky;top:0;z-index:50;background:var(--card);border-bottom:1px solid var(--border);padding:0 26px;height:58px;display:flex;align-items:center;justify-content:space-between}
+.tbtit{font-size:15px;font-weight:800}
+.content{padding:26px}
+
+/* ── STATS ── */
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:22px}
+.scard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;position:relative;overflow:hidden;box-shadow:var(--sh);transition:transform var(--tr)}
+.scard:hover{transform:translateY(-2px)}
+.scard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent)}
+.scard.bl::before{background:var(--a2)}.scard.gr::before{background:var(--a3)}.scard.wn::before{background:var(--warn)}
+.sval{font-size:30px;font-weight:800;font-family:var(--mono);line-height:1;margin-bottom:3px}
+.slbl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:600}
+.sic{position:absolute;right:14px;top:14px;font-size:26px;opacity:.13}
+
+/* ── TABLE ── */
+.twrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{background:var(--bg2);position:sticky;top:0;z-index:1}
+th{padding:9px 13px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-family:var(--mono);white-space:nowrap}
+td{padding:9px 13px;border-top:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:var(--bg2)}
+
+/* ── BADGE ── */
+.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.bgr{background:#d4f5df;color:#1a6e35}.byw{background:#fef3cc;color:#8a5e00}.brd{background:#ffe0e0;color:#8a0000}.bbl{background:#dde9ff;color:#1a3e8a}.bgy{background:var(--bg2);color:var(--text2)}
+[data-theme=dark] .bgr{background:#0d3520;color:#4ade80}[data-theme=dark] .byw{background:#3d2e00;color:#fbbf24}[data-theme=dark] .brd{background:#3d0000;color:#f87171}[data-theme=dark] .bbl{background:#0d2040;color:#60a5fa}
+
+/* ── MODAL ── */
+.moverlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease}
+.modal{background:var(--card);border-radius:16px;border:1px solid var(--border);width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:var(--shlg);animation:fadeUp .28s ease}
+.mlg{max-width:680px}
+.mhd{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);z-index:1;border-radius:16px 16px 0 0}
+.mhd h3{font-size:15px;font-weight:800}
+.mbd{padding:22px}
+.mft{padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.xbtn{background:none;border:none;cursor:pointer;font-size:18px;color:var(--text2);padding:3px 7px;border-radius:5px}.xbtn:hover{background:var(--bg2)}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--rs);padding:3px;margin-bottom:18px}
+.tbtn{flex:1;padding:7px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:none;color:var(--text2);font-family:var(--mono);text-transform:uppercase;transition:all var(--tr)}
+.tbtn.active{background:var(--card);color:var(--text);box-shadow:var(--sh)}
+
+/* ── FILTERS ── */
+.fbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end}
+.fg-f{display:flex;flex-direction:column;gap:3px}
+.fg-f label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-family:var(--mono)}
+.fg-f select,.fg-f input{padding:6px 11px;border:1px solid var(--border);border-radius:var(--rs);font-family:var(--font);font-size:12px;background:var(--card);color:var(--text);outline:none}
+.fg-f select:focus,.fg-f input:focus{border-color:var(--accent)}
+
+/* ── PAGE ── */
+.page{display:none}.page.active{display:block}
+.sechd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.sectit{font-size:19px;font-weight:800}
+.secsub{font-size:12px;color:var(--text2);margin-top:2px;font-family:var(--mono)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;margin-bottom:18px;box-shadow:var(--sh)}
+.ctit{font-size:13px;font-weight:800;margin-bottom:14px}
+
+/* ── CHART ── */
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+.ccard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px;box-shadow:var(--sh)}
+.ctitle{font-size:11px;font-weight:700;margin-bottom:14px;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+
+/* ── QUINZENA ── */
+.qbar{display:flex;gap:7px;margin-bottom:18px;flex-wrap:wrap}
+.qbtn{padding:7px 14px;border-radius:20px;font-size:11px;font-weight:700;font-family:var(--mono);cursor:pointer;border:1px solid var(--border);background:var(--card);color:var(--text2);transition:all var(--tr);text-transform:uppercase}
+.qbtn:hover{border-color:var(--accent);color:var(--accent)}.qbtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── FAB ── */
+.fab{position:fixed;bottom:26px;right:26px;z-index:200;width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:22px;cursor:pointer;box-shadow:0 4px 18px rgba(217,95,43,.45);display:flex;align-items:center;justify-content:center;transition:all var(--tr)}
+.fab:hover{transform:scale(1.1) rotate(45deg)}
+.fabmenu{position:fixed;bottom:90px;right:26px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.fabact{display:flex;align-items:center;gap:9px;cursor:pointer;animation:fadeUp .2s ease}
+.fablbl{background:var(--card);border:1px solid var(--border);padding:5px 11px;border-radius:20px;font-size:11px;font-weight:700;box-shadow:var(--sh);white-space:nowrap}
+.fabbtn{width:38px;height:38px;border-radius:50%;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:var(--sh)}
+
+/* ── TOAST ── */
+.tct{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:7px;pointer-events:none}
+.toast{padding:11px 18px;border-radius:9px;font-size:12px;font-weight:700;box-shadow:var(--shlg);animation:toastIn .3s ease;font-family:var(--mono);max-width:340px;text-align:center}
+.ts{background:var(--a3);color:#fff}.te{background:var(--danger);color:#fff}.ti{background:var(--a2);color:#fff}
+
+/* ── MISC ── */
+.loader{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.empty{text-align:center;padding:50px 20px;color:var(--text2)}
+.empty .eic{font-size:42px;margin-bottom:10px;opacity:.35}
+.empty p{font-size:13px;font-family:var(--mono)}
+.kbd{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:1px 5px;font-size:9px}
+.kh{font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:7px}
+.pbar{height:5px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-top:7px}
+.pfill{height:100%;background:var(--accent);border-radius:3px;transition:width .5s ease}
+.ibox{background:var(--bg2);border-radius:9px;padding:13px;font-size:11px;font-family:var(--mono);margin-bottom:14px}
+.ibox strong{color:var(--text)}
+.ibox-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px;color:var(--text2);margin-top:6px}
+
+/* ── ANIMS ── */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes toastIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){:root{--sw:0px}.sidebar{transform:translateX(-248px)}.sidebar.open{transform:translateX(0);width:248px}.main{margin-left:0}.cgrid,.fr,.fr3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen">
+  <div class="lbox">
+    <div class="llogo">
+      <div class="llogo-ic">D</div>
+      <div class="llogo-tx">Controle de Diárias<span>Sistema v3 · 2025</span></div>
+    </div>
+    <h2 style="font-size:21px;font-weight:800;margin-bottom:5px">Bem-vindo</h2>
+    <p style="color:var(--text2);font-size:12px;margin-bottom:24px;font-family:var(--mono)">Faça login para acessar o sistema</p>
+    <div class="fg"><label>Usuário</label><input type="text" id="li-user" placeholder="ex: admin" autocomplete="username"></div>
+    <div class="fg"><label>Senha</label><input type="password" id="li-pass" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn bp bfull" onclick="doLogin()">🔐 Entrar</button>
+    <div id="login-error">❌ Usuário ou senha incorretos</div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sbh">
+      <div class="sblogo">D</div>
+      <div class="sbtit">Diárias<span>v3 · Sistema</span></div>
+    </div>
+    <nav class="sbnav">
+      <div class="nvsec">
+        <div class="nvlbl">Principal</div>
+        <div class="nvi active" onclick="showPage('dashboard',this)"><span class="ic">📊</span>Dashboard</div>
+        <div class="nvi" onclick="showPage('diarias',this)"><span class="ic">📋</span>Diárias</div>
+        <div class="nvi" onclick="showPage('ocorrencias',this)"><span class="ic">⚠️</span>Ocorrências</div>
+        <div class="nvi" onclick="showPage('multas',this)"><span class="ic">🚦</span>Multas & Avarias</div>
+      </div>
+      <div class="nvsec">
+        <div class="nvlbl">Gestão</div>
+        <div class="nvi" onclick="showPage('fechamento',this)"><span class="ic">📅</span>Fechamento</div>
+        <div class="nvi" onclick="showPage('prestadores',this)"><span class="ic">👥</span>Prestadores</div>
+        <div class="nvi" id="nav-usuarios" style="display:none" onclick="showPage('usuarios',this)"><span class="ic">🔑</span>Usuários</div>
+        <div class="nvi" id="nav-config" style="display:none" onclick="showPage('configuracoes',this)"><span class="ic">⚙️</span>Configurações</div>
+      </div>
+      <div class="nvsec">
+        <div class="nvlbl">Exportar</div>
+        <div class="nvi" onclick="exportarExcel()"><span class="ic">📗</span>Gerar Excel</div>
+        <div class="nvi" onclick="gerarTodosPDFs()"><span class="ic">📄</span>Todos os PDFs</div>
+      </div>
+    </nav>
+    <div class="sbft">
+      <div class="uinfo">
+        <div class="uav" id="uav">A</div>
+        <div><div class="unm" id="unm">—</div><div class="url" id="url">—</div></div>
+      </div>
+      <div class="rts"><span class="rtdot"></span>Realtime ativo</div>
+      <button class="btn bs bfull bsm" onclick="logout()">Sair</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn bs bic" id="menu-toggle" onclick="toggleSidebar()" style="display:none">☰</button>
+        <span class="tbtit" id="page-title">Dashboard</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <button class="btn bs bsm" onclick="toggleTheme()" id="theme-btn">🌙 Escuro</button>
+        <button class="btn bp bsm" onclick="abrirModalDiaria()">+ Diária</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ══ DASHBOARD ══ -->
+      <div class="page active" id="page-dashboard">
+        <div class="sechd">
+          <div><div class="sectit">Dashboard</div><div class="secsub" id="dash-sub">Carregando...</div></div>
+          <button class="btn bs bsm" onclick="loadDashboard()">🔄 Atualizar</button>
+        </div>
+        <div class="qbar" id="dash-qbar"></div>
+        <div class="sgrid">
+          <div class="scard"><div class="sic">📋</div><div class="sval" id="s-tot">—</div><div class="slbl">Total Diárias</div></div>
+          <div class="scard bl"><div class="sic">👥</div><div class="sval" id="s-pr">—</div><div class="slbl">Prestadores</div></div>
+          <div class="scard gr"><div class="sic">✅</div><div class="sval" id="s-ap">—</div><div class="slbl">Aprovadas</div></div>
+          <div class="scard wn"><div class="sic">⏳</div><div class="sval" id="s-pe">—</div><div class="slbl">Pendentes</div></div>
+        </div>
+        <div class="cgrid">
+          <div class="ccard"><div class="ctitle">Diárias por Prestador</div><canvas id="ch-p" height="200"></canvas></div>
+          <div class="ccard"><div class="ctitle">Diárias por Operação</div><canvas id="ch-o" height="200"></canvas></div>
+        </div>
+        <div class="card"><div class="ctit">📋 Últimas Diárias</div>
+          <div class="twrap"><table><thead><tr><th>Data</th><th>Prestador</th><th>Operação</th><th>Placa</th><th>Status</th></tr></thead><tbody id="dash-tb"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ══ DIÁRIAS ══ -->
+      <div class="page" id="page-diarias">
+        <div class="sechd">
+          <div><div class="sectit">Diárias</div><div class="secsub">Registro e controle de diárias</div></div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn bs bsm" onclick="openM('m-imp-diar')">📥 Importar Excel</button>
+            <button class="btn bp bsm" onclick="abrirModalDiaria()">+ Nova Diária</button>
+          </div>
+        </div>
+        <div class="card" style="padding:13px">
+          <div class="fbar">
+            <div class="fg-f"><label>Quinzena</label><select id="f-q" onchange="loadDiarias()"><option value="">Todas</option></select></div>
+            <div class="fg-f"><label>Prestador</label><select id="f-p" onchange="loadDiarias()"><option value="">Todos</option></select></div>
+            <div class="fg-f"><label>Operação</label><select id="f-o" onchange="loadDiarias()"><option value="">Todas</option></select></div>
+            <div class="fg-f"><label>Placa</label><input type="text" id="f-pl" placeholder="ABC-1234" oninput="loadDiarias()" style="width:100px"></div>
+            <div class="fg-f"><label>Status</label><select id="f-st" onchange="loadDiarias()"><option value="">Todos</option><option value="pendente">Pendente</option><option value="aprovada">Aprovada</option><option value="rejeitada">Rejeitada</option></select></div>
+            <button class="btn bs bsm" onclick="clearF()">✕</button>
+          </div>
+        </div>
+        <div class="twrap"><table><thead><tr><th>Data</th><th>Prestador</th><th>Operação</th><th>Serviço</th><th>Placa</th><th>KM Ini</th><th>KM Fim</th><th>Status</th><th>Usuário</th><th>Ações</th></tr></thead><tbody id="diar-tb"></tbody></table></div>
+      </div>
+
+      <!-- ══ OCORRÊNCIAS ══ -->
+      <div class="page" id="page-ocorrencias">
+        <div class="sechd">
+          <div><div class="sectit">Ocorrências</div></div>
+          <button class="btn bp bsm" onclick="openM('m-ocorr')">+ Nova Ocorrência</button>
+        </div>
+        <div class="twrap"><table><thead><tr><th>Data</th><th>Prestador</th><th>Placa</th><th>Tipo</th><th>Descrição</th><th>Status</th><th>Ações</th></tr></thead><tbody id="ocorr-tb"></tbody></table></div>
+      </div>
+
+      <!-- ══ MULTAS ══ -->
+      <div class="page" id="page-multas">
+        <div class="sechd">
+          <div><div class="sectit">Multas & Avarias</div><div class="secsub">Clique no status para alternar</div></div>
+          <button class="btn bp bsm" onclick="openM('m-multa')">+ Registrar</button>
+        </div>
+        <div class="twrap"><table><thead><tr><th>Data</th><th>Prestador</th><th>Placa</th><th>Tipo</th><th>Valor</th><th>Descrição</th><th>Status</th><th>Ações</th></tr></thead><tbody id="mult-tb"></tbody></table></div>
+      </div>
+
+      <!-- ══ FECHAMENTO ══ -->
+      <div class="page" id="page-fechamento">
+        <div class="sechd"><div><div class="sectit">Fechamento Quinzenal</div><div class="secsub">Aprovação por prestador</div></div></div>
+        <div class="qbar" id="fech-qbar"></div>
+        <div id="fech-ct"></div>
+      </div>
+
+      <!-- ══ PRESTADORES ══ -->
+      <div class="page" id="page-prestadores">
+        <div class="sechd">
+          <div><div class="sectit">Prestadores</div><div class="secsub" id="pct">—</div></div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn bs bsm" onclick="dlModeloPrest()">📋 Modelo Excel</button>
+            <button class="btn bs bsm" onclick="openM('m-imp-prest')">📥 Importar Excel</button>
+            <button class="btn bp bsm" onclick="abrirNovoPrest()">+ Novo Prestador</button>
+          </div>
+        </div>
+        <!-- busca -->
+        <div class="card" style="padding:13px;margin-bottom:14px">
+          <div class="fbar" style="margin-bottom:0">
+            <div class="fg-f" style="flex:1;min-width:210px"><label>Buscar</label><input type="text" id="bp-q" placeholder="Nome, CPF, cidade, telefone..." oninput="filterPrests()" style="width:100%"></div>
+            <div class="fg-f"><label>Status</label><select id="bp-st" onchange="filterPrests()"><option value="">Todos</option><option value="ativo">Ativos</option><option value="inativo">Inativos</option></select></div>
+            <button class="btn bs bsm" onclick="clearPF()">✕</button>
+          </div>
+        </div>
+        <div class="twrap"><table>
+          <thead><tr><th>#</th><th>Nome</th><th>CPF/CNPJ</th><th>Telefone</th><th>Email</th><th>Cidade/UF</th><th>Banco</th><th>PIX</th><th>Vlr Diária</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="prest-tb"></tbody>
+        </table></div>
+      </div>
+
+      <!-- ══ USUÁRIOS ══ -->
+      <div class="page" id="page-usuarios">
+        <div class="sechd"><div><div class="sectit">Usuários</div></div><button class="btn bp bsm" onclick="openM('m-user')">+ Novo Usuário</button></div>
+        <div class="twrap"><table><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Status</th><th>Ações</th></tr></thead><tbody id="user-tb"></tbody></table></div>
+      </div>
+
+      <!-- ══ CONFIGURAÇÕES ══ -->
+      <div class="page" id="page-configuracoes">
+        <div class="sectit" style="margin-bottom:18px">Configurações</div>
+        <div class="card"><div class="ctit">🔧 Operações</div><div id="ops-lst" style="margin-bottom:14px"></div>
+          <div style="display:flex;gap:9px"><input type="text" id="nova-op" placeholder="Nome da operação" style="flex:1;padding:8px 11px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px"><button class="btn bp bsm" onclick="addOp()">+ Adicionar</button></div>
+        </div>
+        <div class="card"><div class="ctit">🛠️ Serviços</div><div id="srvs-lst" style="margin-bottom:14px"></div>
+          <div style="display:flex;gap:9px"><input type="text" id="novo-srv" placeholder="Nome do serviço" style="flex:1;padding:8px 11px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px"><button class="btn bp bsm" onclick="addSrv()">+ Adicionar</button></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button class="fab" id="fab" onclick="toggleFab()">+</button>
+<div class="fabmenu" id="fabmenu" style="display:none">
+  <div class="fabact" onclick="abrirModalDiaria();toggleFab()"><div class="fablbl">Nova Diária</div><div class="fabbtn">📋</div></div>
+  <div class="fabact" onclick="openM('m-ocorr');toggleFab()"><div class="fablbl">Nova Ocorrência</div><div class="fabbtn">⚠️</div></div>
+  <div class="fabact" onclick="openM('m-multa');toggleFab()"><div class="fablbl">Registrar Multa/Avaria</div><div class="fabbtn">🚦</div></div>
+</div>
+<div class="tct" id="tct"></div>
+
+<!-- ══════════════ MODAIS ══════════════ -->
+
+<!-- DIÁRIA -->
+<div class="moverlay" id="m-diar" style="display:none" onclick="closeOv(event,'m-diar')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhd"><h3 id="m-diar-tit">Nova Diária</h3><button class="xbtn" onclick="closeM('m-diar')">✕</button></div>
+    <div class="mbd">
+      <input type="hidden" id="d-id">
+      <div class="fr"><div class="fg"><label>Prestador *</label><select id="d-pr"></select></div><div class="fg"><label>Operação *</label><select id="d-op"></select></div></div>
+      <div class="fr"><div class="fg"><label>Serviço</label><select id="d-sv"></select></div><div class="fg"><label>Data *</label><input type="date" id="d-dt"></div></div>
+      <div class="fr"><div class="fg"><label>Placa</label><input type="text" id="d-pl" placeholder="ABC-1234" maxlength="8"></div><div class="fg"><label>Status</label><select id="d-st"><option value="pendente">Pendente</option><option value="aprovada">Aprovada</option><option value="rejeitada">Rejeitada</option></select></div></div>
+      <div class="fr"><div class="fg"><label>KM Inicial</label><input type="number" id="d-ki" placeholder="0"></div><div class="fg"><label>KM Final</label><input type="number" id="d-kf" placeholder="0"></div></div>
+      <div class="fg"><label>Observações</label><textarea id="d-ob"></textarea></div>
+      <div class="kh">💡 <span class="kbd">Ctrl+Enter</span> para salvar</div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="closeM('m-diar')">Cancelar</button><button class="btn bp" onclick="saveDiaria()">💾 Salvar</button></div>
+  </div>
+</div>
+
+<!-- OCORRÊNCIA -->
+<div class="moverlay" id="m-ocorr" style="display:none" onclick="closeOv(event,'m-ocorr')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhd"><h3>Nova Ocorrência</h3><button class="xbtn" onclick="closeM('m-ocorr')">✕</button></div>
+    <div class="mbd">
+      <div class="fr"><div class="fg"><label>Prestador *</label><select id="o-pr"></select></div><div class="fg"><label>Data *</label><input type="date" id="o-dt"></div></div>
+      <div class="fr"><div class="fg"><label>Placa</label><input type="text" id="o-pl" placeholder="ABC-1234"></div><div class="fg"><label>Tipo</label><select id="o-tp"><option value="acidente">Acidente</option><option value="quebra">Quebra</option><option value="atraso">Atraso</option><option value="multa">Multa</option><option value="outro">Outro</option></select></div></div>
+      <div class="fg"><label>Descrição *</label><textarea id="o-ds" placeholder="Descreva a ocorrência..."></textarea></div>
+      <div class="kh">💡 <span class="kbd">Ctrl+Enter</span> para salvar</div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="closeM('m-ocorr')">Cancelar</button><button class="btn bp" onclick="saveOcorr()">💾 Salvar</button></div>
+  </div>
+</div>
+
+<!-- MULTA -->
+<div class="moverlay" id="m-multa" style="display:none" onclick="closeOv(event,'m-multa')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhd"><h3>Registrar Multa / Avaria</h3><button class="xbtn" onclick="closeM('m-multa')">✕</button></div>
+    <div class="mbd">
+      <div class="fr"><div class="fg"><label>Prestador *</label><select id="mu-pr"></select></div><div class="fg"><label>Tipo</label><select id="mu-tp"><option value="multa">Multa</option><option value="avaria">Avaria</option></select></div></div>
+      <div class="fr"><div class="fg"><label>Placa</label><input type="text" id="mu-pl" placeholder="ABC-1234"></div><div class="fg"><label>Data</label><input type="date" id="mu-dt"></div></div>
+      <div class="fr"><div class="fg"><label>Valor (R$)</label><input type="number" id="mu-vl" placeholder="0,00" step="0.01"></div><div class="fg"><label>Status</label><select id="mu-st"><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="contestado">Contestado</option><option value="cancelado">Cancelado</option></select></div></div>
+      <div class="fg"><label>Descrição</label><textarea id="mu-ds" placeholder="Detalhes..."></textarea></div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="closeM('m-multa')">Cancelar</button><button class="btn bp" onclick="saveMulta()">💾 Salvar</button></div>
+  </div>
+</div>
+
+<!-- PRESTADOR — 3 ABAS -->
+<div class="moverlay" id="m-prest" style="display:none" onclick="closeOv(event,'m-prest')">
+  <div class="modal mlg" onclick="event.stopPropagation()">
+    <div class="mhd"><h3 id="m-prest-tit">Novo Prestador</h3><button class="xbtn" onclick="closeM('m-prest')">✕</button></div>
+    <div class="mbd">
+      <input type="hidden" id="p-id">
+      <div class="tabs">
+        <button class="tbtn active" onclick="tabP('dados',this)">👤 Dados</button>
+        <button class="tbtn" onclick="tabP('end',this)">🏠 Endereço</button>
+        <button class="tbtn" onclick="tabP('fin',this)">💳 Financeiro</button>
+      </div>
+      <!-- DADOS -->
+      <div id="tab-dados">
+        <div class="fg"><label>Nome Completo *</label><input type="text" id="p-nm" placeholder="Nome completo do prestador"></div>
+        <div class="fr"><div class="fg"><label>CPF / CNPJ</label><input type="text" id="p-doc" placeholder="000.000.000-00"></div><div class="fg"><label>Nascimento</label><input type="date" id="p-nasc"></div></div>
+        <div class="fr"><div class="fg"><label>Telefone / WhatsApp</label><input type="text" id="p-tel" placeholder="(00) 00000-0000"></div><div class="fg"><label>Email</label><input type="email" id="p-em" placeholder="email@exemplo.com"></div></div>
+        <div class="fr"><div class="fg"><label>Nº CNH</label><input type="text" id="p-cnh" placeholder="Número CNH"></div><div class="fg"><label>Categoria CNH</label><select id="p-ccat"><option value="">—</option><option>A</option><option>B</option><option>AB</option><option>C</option><option>D</option><option>E</option></select></div></div>
+        <div class="fr"><div class="fg"><label>Status</label><select id="p-st"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div><div class="fg"><label>Observações</label><input type="text" id="p-ob" placeholder="Observações gerais"></div></div>
+      </div>
+      <!-- ENDEREÇO -->
+      <div id="tab-end" style="display:none">
+        <div class="fr"><div class="fg"><label>CEP</label><input type="text" id="p-cep" placeholder="00000-000" oninput="buscaCEP(this.value)"></div><div class="fg"><label>UF</label><input type="text" id="p-uf" placeholder="SP" maxlength="2"></div></div>
+        <div class="fr"><div class="fg"><label>Cidade</label><input type="text" id="p-cid" placeholder="São Paulo"></div><div class="fg"><label>Bairro</label><input type="text" id="p-bai" placeholder="Bairro"></div></div>
+        <div class="fg"><label>Logradouro</label><input type="text" id="p-rua" placeholder="Rua, Avenida..."></div>
+        <div class="fr"><div class="fg"><label>Número</label><input type="text" id="p-num" placeholder="123"></div><div class="fg"><label>Complemento</label><input type="text" id="p-cmp" placeholder="Apto, Bloco..."></div></div>
+      </div>
+      <!-- FINANCEIRO -->
+      <div id="tab-fin" style="display:none">
+        <div class="fr"><div class="fg"><label>Banco</label><input type="text" id="p-ban" placeholder="Ex: Nubank, Bradesco..."></div><div class="fg"><label>Tipo de Conta</label><select id="p-tct"><option value="">—</option><option value="corrente">Corrente</option><option value="poupança">Poupança</option><option value="pagamento">Pagamento</option></select></div></div>
+        <div class="fr"><div class="fg"><label>Agência</label><input type="text" id="p-ag" placeholder="0000"></div><div class="fg"><label>Conta</label><input type="text" id="p-ct" placeholder="00000-0"></div></div>
+        <div class="fg"><label>Chave PIX</label><input type="text" id="p-pix" placeholder="CPF, email, telefone ou chave aleatória"></div>
+        <div class="fr"><div class="fg"><label>Valor Diária (R$)</label><input type="number" id="p-vd" placeholder="0,00" step="0.01"></div><div class="fg"><label>Valor KM (R$)</label><input type="number" id="p-vkm" placeholder="0,00" step="0.01"></div></div>
+      </div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="closeM('m-prest')">Cancelar</button><button class="btn bp" onclick="savePrest()">💾 Salvar Prestador</button></div>
+  </div>
+</div>
+
+<!-- IMPORTAR PRESTADORES -->
+<div class="moverlay" id="m-imp-prest" style="display:none" onclick="closeOv(event,'m-imp-prest')">
+  <div class="modal mlg" onclick="event.stopPropagation()">
+    <div class="mhd"><h3>Importar Prestadores via Excel</h3><button class="xbtn" onclick="closeM('m-imp-prest')">✕</button></div>
+    <div class="mbd">
+      <div class="ibox">
+        <strong>📋 Colunas aceitas na planilha:</strong>
+        <div class="ibox-grid">
+          <span>• <strong>nome</strong> (obrigatório)</span><span>• cpf_cnpj</span>
+          <span>• telefone</span><span>• email</span><span>• banco</span><span>• pix</span>
+          <span>• agencia</span><span>• conta</span><span>• cep</span><span>• cidade</span>
+          <span>• uf</span><span>• endereco</span><span>• cnh</span><span>• valor_diaria</span>
+          <span>• valor_km</span><span>• obs</span>
+        </div>
+        <div style="margin-top:11px"><button class="btn bs bsm" onclick="dlModeloPrest()">⬇️ Baixar planilha modelo com exemplos</button></div>
+      </div>
+      <div class="fg"><label>Selecionar arquivo Excel (.xlsx)</label><input type="file" id="ip-f" accept=".xlsx,.xls" onchange="prevPrest()"></div>
+      <div id="ip-prev" style="display:none;margin-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+          <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">Prévia (5 primeiras linhas):</span>
+          <span id="ip-cnt" style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--accent)"></span>
+        </div>
+        <div class="twrap" style="max-height:190px;overflow-y:auto"><table id="ip-tbl" style="font-size:10px"></table></div>
+        <div id="ip-warn" style="display:none;margin-top:7px;font-size:11px;color:var(--danger);font-family:var(--mono)"></div>
+      </div>
+    </div>
+    <div class="mft">
+      <button class="btn bs" onclick="closeM('m-imp-prest')">Cancelar</button>
+      <button class="btn bp" id="ip-btn" onclick="importPrests()" disabled style="opacity:.5">📥 Importar Prestadores</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORTAR DIÁRIAS -->
+<div class="moverlay" id="m-imp-diar" style="display:none" onclick="closeOv(event,'m-imp-diar')">
+  <div class="modal mlg" onclick="event.stopPropagation()">
+    <div class="mhd"><h3>Importar Diárias via Excel</h3><button class="xbtn" onclick="closeM('m-imp-diar')">✕</button></div>
+    <div class="mbd">
+      <div class="ibox">
+        <strong>📋 Colunas da planilha:</strong>
+        <div class="ibox-grid">
+          <span>• <strong>data</strong> DD/MM/AAAA — obrigatório</span>
+          <span>• <strong>prestador</strong> nome exato — obrigatório</span>
+          <span>• operacao</span><span>• servico</span><span>• placa</span>
+          <span>• km_ini</span><span>• km_fim</span><span>• obs</span>
+        </div>
+        <div style="margin-top:11px"><button class="btn bs bsm" onclick="dlModeloDiar()">⬇️ Baixar planilha modelo preenchida</button></div>
+      </div>
+      <div class="fg"><label>Selecionar arquivo Excel (.xlsx)</label><input type="file" id="id-f" accept=".xlsx,.xls" onchange="prevDiar()"></div>
+      <div id="id-prev" style="display:none;margin-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+          <span style="font-size:11px;font-family:var(--mono);color:var(--text2)">Prévia:</span>
+          <span id="id-cnt" style="font-size:11px;font-family:var(--mono);font-weight:700;color:var(--accent)"></span>
+        </div>
+        <div class="twrap" style="max-height:190px;overflow-y:auto"><table id="id-tbl" style="font-size:10px"></table></div>
+      </div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="closeM('m-imp-diar')">Cancelar</button><button class="btn bp" onclick="importDiar()">📥 Importar Diárias</button></div>
+  </div>
+</div>
+
+<!-- USUÁRIO -->
+<div class="moverlay" id="m-user" style="display:none" onclick="closeOv(event,'m-user')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="mhd"><h3>Novo Usuário</h3><button class="xbtn" onclick="closeM('m-user')">✕</button></div>
+    <div class="mbd">
+      <div class="fg"><label>Nome *</label><input type="text" id="u-nm"></div>
+      <div class="fr"><div class="fg"><label>Login *</label><input type="text" id="u-lg"></div><div class="fg"><label>Senha *</label><input type="password" id="u-sn"></div></div>
+      <div class="fr"><div class="fg"><label>Perfil</label><select id="u-pf"><option value="operador">Operador</option><option value="supervisor">Supervisor</option><option value="admin">Admin</option></select></div><div class="fg"><label>Status</label><select id="u-st"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div></div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="closeM('m-user')">Cancelar</button><button class="btn bp" onclick="saveUser()">💾 Salvar</button></div>
+  </div>
+</div>
+
+<script>
+// ══ CONFIG ══
+const SB_URL='https://ldgiaddoqaxgmbirxoer.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkZ2lhZGRvcWF4Z21iaXJ4b2VyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5ODAwNzEsImV4cCI6MjA5MjU1NjA3MX0.L-V0VWgEbxijZhilQF_MsIdqNXqRm1PF0SeWm-zC648';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+// ══ STATE ══
+let CU=null,allP=[],allO=[],allS=[],allPcache=[],selQ=null,chP=null,chO=null,fabOpen=false,rtCh=null;
+
+const LOCAL_USERS=[
+  {login:'admin',senha:'admin123',nome:'Administrador',perfil:'admin'},
+  {login:'supervisor',senha:'super123',nome:'Supervisor',perfil:'supervisor'},
+  {login:'operador',senha:'op123',nome:'Operador',perfil:'operador'},
+];
+
+// ══ AUTH ══
+async function doLogin(){
+  const l=el('li-user').value.trim(),s=el('li-pass').value;
+  let u=null;
+  try{const{data}=await sb.from('usuarios').select('*').eq('login',l).eq('senha',s).eq('status','ativo').single();if(data)u=data;}catch{}
+  if(!u)u=LOCAL_USERS.find(x=>x.login===l&&x.senha===s);
+  if(!u){el('login-error').style.display='block';return;}
+  el('login-error').style.display='none';CU=u;initApp();
+}
+function logout(){CU=null;if(rtCh)sb.removeChannel(rtCh);el('app').style.display='none';el('login-screen').style.display='flex';}
+el('li-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+// ══ INIT ══
+async function initApp(){
+  el('login-screen').style.display='none';el('app').style.display='block';
+  const nm=CU.nome||CU.login;
+  el('unm').textContent=nm;el('url').textContent=CU.perfil;el('uav').textContent=nm[0].toUpperCase();
+  if(CU.perfil==='admin'){el('nav-usuarios').style.display='flex';el('nav-config').style.display='flex';}
+  await Promise.all([fetchP(),fetchO(),fetchS()]);
+  fillSels();buildQs();loadDashboard();setupRT();setupKeys();
+}
+
+// ══ FETCH ══
+async function fetchP(){try{const{data}=await sb.from('prestadores').select('*').eq('status','ativo').order('nome');allP=data||[];}catch{allP=[];}}
+async function fetchO(){try{const{data}=await sb.from('operacoes').select('*').order('nome');allO=data||[];}catch{allO=[];}}
+async function fetchS(){try{const{data}=await sb.from('servicos').select('*').order('nome');allS=data||[];}catch{allS=[];}}
+
+// ══ FILL SELECTS ══
+function fillSels(){
+  fillSel(['d-pr','o-pr','mu-pr'],allP);
+  const ds=el('d-op');if(ds){ds.innerHTML='<option value="">— Selecione —</option>';allO.forEach(o=>{const x=document.createElement('option');x.value=o.id;x.textContent=o.nome;ds.appendChild(x);});}
+  const ss=el('d-sv');if(ss){ss.innerHTML='<option value="">— Selecione —</option>';allS.forEach(s=>{const x=document.createElement('option');x.value=s.id;x.textContent=s.nome;ss.appendChild(x);});}
+  const fp=el('f-p');if(fp){fp.innerHTML='<option value="">Todos</option>';allP.forEach(p=>{const x=document.createElement('option');x.value=p.id;x.textContent=p.nome;fp.appendChild(x);});}
+  const fo=el('f-o');if(fo){fo.innerHTML='<option value="">Todas</option>';allO.forEach(o=>{const x=document.createElement('option');x.value=o.id;x.textContent=o.nome;fo.appendChild(x);});}
+}
+function fillSel(ids,arr){ids.forEach(id=>{const s=el(id);if(!s)return;s.innerHTML='<option value="">— Selecione —</option>';arr.forEach(p=>{const x=document.createElement('option');x.value=p.id;x.textContent=p.nome;s.appendChild(x);});});}
+
+// ══ QUINZENAS ══
+function getQs(n=6){
+  const list=[],now=new Date();
+  for(let i=0;i<n;i++){
+    const half=i%2===0?2:1;
+    const d=new Date(now.getFullYear(),now.getMonth()-Math.floor(i/2),1);
+    const m=d.getMonth(),y=d.getFullYear();
+    const start=half===1?new Date(y,m,1):new Date(y,m,16);
+    const end=half===1?new Date(y,m,15):new Date(y,m+1,0);
+    list.unshift({label:`${half}ª Q ${m+1}/${y}`,start:fd(start),end:fd(end)});
+  }
+  return list;
+}
+function fd(d){return d.toISOString().split('T')[0];}
+
+function buildQs(){
+  const qs=getQs();selQ=qs[qs.length-1];
+  [['dash-qbar',loadDashboard],['fech-qbar',loadFech]].forEach(([barId,fn])=>{
+    const bar=el(barId);bar.innerHTML='';
+    qs.forEach((q,i)=>{
+      const b=document.createElement('button');b.className='qbtn'+(i===qs.length-1?' active':'');b.textContent=q.label;
+      b.onclick=()=>{bar.querySelectorAll('.qbtn').forEach(x=>x.classList.remove('active'));b.classList.add('active');selQ=q;fn();};
+      bar.appendChild(b);
+    });
+  });
+  const fq=el('f-q');if(fq){fq.innerHTML='<option value="">Todas</option>';getQs().forEach(q=>{const o=document.createElement('option');o.value=q.start+'|'+q.end;o.textContent=q.label;fq.appendChild(o);});}
+}
+
+// ══ DASHBOARD ══
+async function loadDashboard(){
+  if(!selQ)return;
+  el('dash-sub').textContent=`${selQ.label} · ${selQ.start} até ${selQ.end}`;
+  const{data}=await sb.from('diarias').select('*, prestadores(nome), operacoes(nome)').gte('data',selQ.start).lte('data',selQ.end);
+  const all=data||[];
+  el('s-tot').textContent=all.length;
+  el('s-ap').textContent=all.filter(d=>d.status==='aprovada').length;
+  el('s-pe').textContent=all.filter(d=>d.status==='pendente').length;
+  el('s-pr').textContent=new Set(all.map(d=>d.prestador_id)).size;
+  const tb=el('dash-tb');tb.innerHTML='';
+  if(!all.length){tb.innerHTML='<tr><td colspan="5"><div class="empty"><div class="eic">📋</div><p>Nenhuma diária nesta quinzena</p></div></td></tr>';}
+  else all.slice(0,20).forEach(d=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${d.data}</td><td>${d.prestadores?.nome||'—'}</td><td>${d.operacoes?.nome||'—'}</td><td>${d.placa||'—'}</td><td>${bdg(d.status)}</td>`;tb.appendChild(tr);});
+  buildCharts(all);
+}
+
+function buildCharts(data){
+  const byP={},byO={};
+  data.forEach(d=>{const pn=d.prestadores?.nome||'?';byP[pn]=(byP[pn]||0)+1;const on=d.operacoes?.nome||'?';byO[on]=(byO[on]||0)+1;});
+  if(chP)chP.destroy();
+  chP=new Chart(el('ch-p').getContext('2d'),{type:'bar',data:{labels:Object.keys(byP),datasets:[{data:Object.values(byP),backgroundColor:'#d95f2b',borderRadius:5}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}}}}});
+  if(chO)chO.destroy();
+  chO=new Chart(el('ch-o').getContext('2d'),{type:'doughnut',data:{labels:Object.keys(byO),datasets:[{data:Object.values(byO),backgroundColor:['#d95f2b','#2b5fd9','#27a551','#d9922b','#8b5cf6','#ec4899']}]},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}}});
+}
+
+// ══ DIÁRIAS ══
+async function loadDiarias(){
+  const tb=el('diar-tb');tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:18px"><div class="loader"></div></td></tr>';
+  let q=sb.from('diarias').select('*, prestadores(nome), operacoes(nome), servicos(nome), usuarios(nome)').order('data',{ascending:false});
+  const quinz=el('f-q')?.value;if(quinz){const[s,e]=quinz.split('|');q=q.gte('data',s).lte('data',e);}
+  const pr=el('f-p')?.value;if(pr)q=q.eq('prestador_id',pr);
+  const op=el('f-o')?.value;if(op)q=q.eq('operacao_id',op);
+  const pl=el('f-pl')?.value;if(pl)q=q.ilike('placa',`%${pl}%`);
+  const st=el('f-st')?.value;if(st)q=q.eq('status',st);
+  const{data}=await q.limit(200);
+  tb.innerHTML='';
+  if(!data?.length){tb.innerHTML='<tr><td colspan="10"><div class="empty"><div class="eic">📋</div><p>Nenhuma diária encontrada</p></div></td></tr>';return;}
+  data.forEach(d=>{
+    const canEdit=CU.perfil!=='operador'||d.status==='pendente';
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${d.data}</td><td>${d.prestadores?.nome||'—'}</td><td>${d.operacoes?.nome||'—'}</td><td>${d.servicos?.nome||'—'}</td><td>${d.placa||'—'}</td><td style="font-family:var(--mono)">${d.km_ini||'—'}</td><td style="font-family:var(--mono)">${d.km_fim||'—'}</td><td>${bdg(d.status)}</td><td>${d.usuarios?.nome||'—'}</td><td style="white-space:nowrap">${canEdit?`<button class="btn bs bsm bic" onclick='editDiar(${JSON.stringify(d)})'>✏️</button> `:''}` +
+    `<button class="btn bs bsm bic" onclick="pdfDiar('${d.id}')">📄</button>${CU.perfil==='admin'?` <button class="btn bd bsm bic" onclick="delDiar('${d.id}')">🗑</button>`:''}` +
+    `</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function abrirModalDiaria(){clearDiarForm();openM('m-diar');}
+
+async function saveDiaria(){
+  const id=el('d-id').value;
+  const pl={prestador_id:el('d-pr').value,operacao_id:el('d-op').value,servico_id:el('d-sv').value||null,data:el('d-dt').value,placa:el('d-pl').value||null,status:el('d-st').value,km_ini:el('d-ki').value||null,km_fim:el('d-kf').value||null,obs:el('d-ob').value||null,usuario_id:CU.id||null};
+  if(!pl.prestador_id||!pl.operacao_id||!pl.data){toast('Preencha os campos obrigatórios','e');return;}
+  const{error}=id?await sb.from('diarias').update(pl).eq('id',id):await sb.from('diarias').insert(pl);
+  if(error){toast('Erro: '+error.message,'e');return;}
+  toast('Diária salva!','s');closeM('m-diar');clearDiarForm();
+  if(el('page-diarias').classList.contains('active'))loadDiarias();
+  loadDashboard();
+}
+
+function editDiar(d){
+  el('d-id').value=d.id;el('d-pr').value=d.prestador_id||'';el('d-op').value=d.operacao_id||'';el('d-sv').value=d.servico_id||'';
+  el('d-dt').value=d.data||'';el('d-pl').value=d.placa||'';el('d-st').value=d.status||'pendente';
+  el('d-ki').value=d.km_ini||'';el('d-kf').value=d.km_fim||'';el('d-ob').value=d.obs||'';
+  el('m-diar-tit').textContent='Editar Diária';openM('m-diar');
+}
+
+function clearDiarForm(){
+  el('d-id').value='';el('m-diar-tit').textContent='Nova Diária';
+  ['d-pr','d-op','d-sv','d-pl','d-ob','d-ki','d-kf'].forEach(id=>{const e=el(id);if(e)e.value='';});
+  el('d-st').value='pendente';el('d-dt').value=new Date().toISOString().split('T')[0];
+}
+
+async function delDiar(id){if(!confirm('Excluir esta diária?'))return;const{error}=await sb.from('diarias').delete().eq('id',id);if(error){toast('Erro','e');return;}toast('Excluída','s');loadDiarias();}
+function clearF(){['f-q','f-p','f-o','f-st'].forEach(id=>{const e=el(id);if(e)e.value='';});el('f-pl').value='';loadDiarias();}
+
+// ══ OCORRÊNCIAS ══
+async function loadOcorr(){
+  const tb=el('ocorr-tb');tb.innerHTML='';
+  const{data}=await sb.from('ocorrencias').select('*, prestadores(nome)').order('data',{ascending:false}).limit(100);
+  if(!data?.length){tb.innerHTML='<tr><td colspan="7"><div class="empty"><div class="eic">⚠️</div><p>Nenhuma ocorrência registrada</p></div></td></tr>';return;}
+  data.forEach(o=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${o.data}</td><td>${o.prestadores?.nome||'—'}</td><td>${o.placa||'—'}</td><td><span class="badge byw">${o.tipo}</span></td><td>${o.descricao||'—'}</td><td>${bdg(o.status||'aberta')}</td><td><button class="btn bd bsm bic" onclick="delOcorr('${o.id}')">🗑</button></td>`;tb.appendChild(tr);});
+}
+async function saveOcorr(){
+  const pl={prestador_id:el('o-pr').value,data:el('o-dt').value,placa:el('o-pl').value||null,tipo:el('o-tp').value,descricao:el('o-ds').value,status:'aberta',usuario_id:CU.id||null};
+  if(!pl.prestador_id||!pl.data||!pl.descricao){toast('Preencha os campos obrigatórios','e');return;}
+  const{error}=await sb.from('ocorrencias').insert(pl);
+  if(error){toast('Erro: '+error.message,'e');return;}
+  toast('Ocorrência registrada!','s');closeM('m-ocorr');loadOcorr();
+}
+async function delOcorr(id){if(!confirm('Excluir?'))return;await sb.from('ocorrencias').delete().eq('id',id);toast('Excluída','s');loadOcorr();}
+
+// ══ MULTAS ══
+async function loadMult(){
+  const tb=el('mult-tb');tb.innerHTML='';
+  const{data}=await sb.from('multas').select('*, prestadores(nome)').order('data',{ascending:false}).limit(100);
+  if(!data?.length){tb.innerHTML='<tr><td colspan="8"><div class="empty"><div class="eic">🚦</div><p>Nenhuma multa registrada</p></div></td></tr>';return;}
+  const nx={pendente:'pago',pago:'contestado',contestado:'cancelado',cancelado:'pendente'};
+  data.forEach(m=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${m.data||'—'}</td><td>${m.prestadores?.nome||'—'}</td><td>${m.placa||'—'}</td><td><span class="badge bbl">${m.tipo}</span></td><td style="font-family:var(--mono)">R$ ${Number(m.valor||0).toFixed(2)}</td><td>${m.descricao||'—'}</td><td><span class="badge ${bdgC(m.status)}" onclick="togMult('${m.id}','${nx[m.status]||'pendente'}')" style="cursor:pointer" title="Clique para mudar status">${m.status} ↻</span></td><td>${CU.perfil==='admin'?`<button class="btn bd bsm bic" onclick="delMult('${m.id}')">🗑</button>`:''}</td>`;tb.appendChild(tr);});
+}
+async function saveMulta(){
+  const pl={prestador_id:el('mu-pr').value,tipo:el('mu-tp').value,placa:el('mu-pl').value||null,data:el('mu-dt').value||null,valor:el('mu-vl').value||0,status:el('mu-st').value,descricao:el('mu-ds').value||null};
+  if(!pl.prestador_id){toast('Selecione o prestador','e');return;}
+  const{error}=await sb.from('multas').insert(pl);if(error){toast('Erro: '+error.message,'e');return;}
+  toast('Registrado!','s');closeM('m-multa');loadMult();
+}
+async function togMult(id,ns){await sb.from('multas').update({status:ns}).eq('id',id);loadMult();}
+async function delMult(id){if(!confirm('Excluir?'))return;await sb.from('multas').delete().eq('id',id);loadMult();}
+
+// ══ FECHAMENTO ══
+async function loadFech(){
+  if(!selQ)return;
+  const c=el('fech-ct');c.innerHTML='<div style="text-align:center;padding:36px"><div class="loader"></div></div>';
+  const{data}=await sb.from('diarias').select('*, prestadores(nome)').gte('data',selQ.start).lte('data',selQ.end);
+  if(!data?.length){c.innerHTML='<div class="empty"><div class="eic">📅</div><p>Nenhuma diária nesta quinzena</p></div>';return;}
+  const byP={};
+  data.forEach(d=>{if(!byP[d.prestador_id])byP[d.prestador_id]={nome:d.prestadores?.nome,id:d.prestador_id,ds:[]};byP[d.prestador_id].ds.push(d);});
+  c.innerHTML='';
+  Object.values(byP).forEach(({nome,id,ds})=>{
+    const ap=ds.filter(d=>d.status==='aprovada').length;
+    const pct=Math.round((ap/ds.length)*100);
+    const fechado=ds.every(d=>d.status!=='pendente');
+    const card=document.createElement('div');card.className='card';
+    card.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:15px;font-weight:800">${nome||'—'}</div><div style="font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:3px">${ds.length} diárias · ${ap} aprovadas · ${ds.length-ap} pendentes</div><div class="pbar" style="width:180px;margin-top:7px"><div class="pfill" style="width:${pct}%"></div></div><div style="font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:3px">${pct}% aprovado</div></div><div style="display:flex;gap:7px;flex-wrap:wrap">${CU.perfil!=='operador'?`<button class="btn bg bsm" onclick="aprovarTodas('${id}')">✅ Aprovar Todas</button>`:''}<button class="btn bs bsm" onclick="pdfPrest('${id}','${nome||''}')">📄 PDF</button><span class="badge ${fechado?'bgr':'byw'}">${fechado?'Fechado':'Em Aberto'}</span></div></div>`;
+    c.appendChild(card);
+  });
+}
+async function aprovarTodas(prestId){
+  if(!selQ)return;
+  const{error}=await sb.from('diarias').update({status:'aprovada'}).eq('prestador_id',prestId).gte('data',selQ.start).lte('data',selQ.end);
+  if(error){toast('Erro','e');return;}toast('Aprovadas!','s');loadFech();
+}
+
+// ══ PRESTADORES — LISTAGEM ══
+async function loadPrestPage(){
+  const tb=el('prest-tb');tb.innerHTML='<tr><td colspan="11" style="text-align:center;padding:18px"><div class="loader"></div></td></tr>';
+  const{data}=await sb.from('prestadores').select('*').order('nome');
+  allPcache=data||[];renderPrests(allPcache);
+}
+function renderPrests(lista){
+  const tb=el('prest-tb');
+  el('pct').textContent=`${lista.length} prestador${lista.length!==1?'es':''} encontrado${lista.length!==1?'s':''}`;
+  if(!lista.length){tb.innerHTML='<tr><td colspan="11"><div class="empty"><div class="eic">👥</div><p>Nenhum prestador encontrado</p></div></td></tr>';return;}
+  tb.innerHTML='';
+  lista.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-family:var(--mono);color:var(--text2);font-size:10px">${i+1}</td>` +
+      `<td style="font-weight:700">${p.nome}</td>` +
+      `<td style="font-family:var(--mono);font-size:11px">${p.cpf_cnpj||'—'}</td>` +
+      `<td>${p.telefone||'—'}</td>` +
+      `<td style="font-size:11px">${p.email||'—'}</td>` +
+      `<td style="font-size:11px">${[p.cidade,p.uf].filter(Boolean).join('/')||'—'}</td>` +
+      `<td style="font-size:11px">${p.banco||'—'}</td>` +
+      `<td style="font-family:var(--mono);font-size:10px">${p.pix||'—'}</td>` +
+      `<td style="font-family:var(--mono);font-size:11px">${p.valor_diaria?'R$'+Number(p.valor_diaria).toFixed(2):'—'}</td>` +
+      `<td><span class="badge ${p.status==='ativo'?'bgr':'bgy'}">${p.status||'ativo'}</span></td>` +
+      `<td style="white-space:nowrap"><button class="btn bs bsm bic" onclick='editPrest(${JSON.stringify(p)})'>✏️</button> <button class="btn bd bsm bic" onclick="delPrest('${p.id}')">🗑</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+function filterPrests(){
+  const q=el('bp-q').value.toLowerCase(),s=el('bp-st').value;
+  renderPrests(allPcache.filter(p=>{
+    const mb=!q||[p.nome,p.cpf_cnpj,p.telefone,p.email,p.cidade,p.pix].some(v=>String(v||'').toLowerCase().includes(q));
+    return mb&&(!s||p.status===s);
+  }));
+}
+function clearPF(){el('bp-q').value='';el('bp-st').value='';renderPrests(allPcache);}
+
+// ══ PRESTADORES — CRUD ══
+function abrirNovoPrest(){
+  el('p-id').value='';el('m-prest-tit').textContent='Novo Prestador';
+  ['p-nm','p-doc','p-nasc','p-tel','p-em','p-cnh','p-ob','p-cep','p-uf','p-cid','p-bai','p-rua','p-num','p-cmp','p-ban','p-ag','p-ct','p-pix','p-vd','p-vkm'].forEach(id=>{const e=el(id);if(e)e.value='';});
+  el('p-st').value='ativo';el('p-ccat').value='';el('p-tct').value='';
+  tabP('dados',document.querySelector('#m-prest .tbtn'));openM('m-prest');
+}
+
+function tabP(tab,btn){
+  ['dados','end','fin'].forEach(t=>{el('tab-'+t).style.display=t===tab?'block':'none';});
+  document.querySelectorAll('#m-prest .tbtn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+}
+
+async function buscaCEP(cep){
+  const c=cep.replace(/\D/g,'');if(c.length!==8)return;
+  try{const r=await fetch(`https://viacep.com.br/ws/${c}/json/`);const d=await r.json();if(d.erro)return;
+  el('p-rua').value=d.logradouro||'';el('p-bai').value=d.bairro||'';el('p-cid').value=d.localidade||'';el('p-uf').value=d.uf||'';}catch{}
+}
+
+async function savePrest(){
+  const id=el('p-id').value;
+  const pl={
+    nome:el('p-nm').value.trim(),cpf_cnpj:el('p-doc').value.trim()||null,
+    telefone:el('p-tel').value.trim()||null,email:el('p-em').value.trim()||null,
+    nascimento:el('p-nasc').value||null,cnh:el('p-cnh').value.trim()||null,
+    cnh_categoria:el('p-ccat').value||null,cep:el('p-cep').value.trim()||null,
+    uf:el('p-uf').value.trim()||null,cidade:el('p-cid').value.trim()||null,
+    bairro:el('p-bai').value.trim()||null,endereco:el('p-rua').value.trim()||null,
+    numero:el('p-num').value.trim()||null,complemento:el('p-cmp').value.trim()||null,
+    banco:el('p-ban').value.trim()||null,tipo_conta:el('p-tct').value||null,
+    agencia:el('p-ag').value.trim()||null,conta:el('p-ct').value.trim()||null,
+    pix:el('p-pix').value.trim()||null,valor_diaria:el('p-vd').value||null,
+    valor_km:el('p-vkm').value||null,obs:el('p-ob').value.trim()||null,
+    status:el('p-st').value,
+  };
+  if(!pl.nome){toast('Nome obrigatório','e');return;}
+  const{error}=id?await sb.from('prestadores').update(pl).eq('id',id):await sb.from('prestadores').insert(pl);
+  if(error){toast('Erro: '+error.message,'e');return;}
+  toast(id?'Prestador atualizado!':'Prestador cadastrado!','s');
+  closeM('m-prest');await fetchP();fillSels();loadPrestPage();
+}
+
+function editPrest(p){
+  el('p-id').value=p.id;el('m-prest-tit').textContent='Editar Prestador';
+  const map={'p-nm':'nome','p-doc':'cpf_cnpj','p-tel':'telefone','p-em':'email','p-nasc':'nascimento','p-cnh':'cnh','p-ccat':'cnh_categoria','p-cep':'cep','p-uf':'uf','p-cid':'cidade','p-bai':'bairro','p-rua':'endereco','p-num':'numero','p-cmp':'complemento','p-ban':'banco','p-tct':'tipo_conta','p-ag':'agencia','p-ct':'conta','p-pix':'pix','p-vd':'valor_diaria','p-vkm':'valor_km','p-ob':'obs','p-st':'status'};
+  Object.entries(map).forEach(([eId,f])=>{const e=el(eId);if(e)e.value=p[f]||'';});
+  tabP('dados',document.querySelector('#m-prest .tbtn'));openM('m-prest');
+}
+
+async function delPrest(id){
+  if(!confirm('Excluir este prestador? Esta ação não pode ser desfeita.'))return;
+  const{error}=await sb.from('prestadores').delete().eq('id',id);
+  if(error){toast('Erro: '+error.message,'e');return;}
+  toast('Excluído','s');await fetchP();fillSels();loadPrestPage();
+}
+
+// ══ MODELO PRESTADORES ══
+function dlModeloPrest(){
+  const ex=[
+    {nome:'João Silva Santos',cpf_cnpj:'123.456.789-00',telefone:'(11) 98765-4321',email:'joao@email.com',banco:'Nubank',pix:'123.456.789-00',agencia:'0001',conta:'123456-7',cep:'01310-100',cidade:'São Paulo',uf:'SP',endereco:'Av. Paulista',numero:'1000',cnh:'12345678900',valor_diaria:'200.00',valor_km:'1.50',obs:'',status:'ativo'},
+    {nome:'Maria Oliveira Costa',cpf_cnpj:'987.654.321-00',telefone:'(21) 91234-5678',email:'maria@email.com',banco:'Bradesco',pix:'maria@email.com',agencia:'1234',conta:'654321-0',cep:'20040-020',cidade:'Rio de Janeiro',uf:'RJ',endereco:'Rua da Quitanda',numero:'50',cnh:'98765432100',valor_diaria:'180.00',valor_km:'1.20',obs:'',status:'ativo'},
+    {nome:'Carlos Ferreira Lima',cpf_cnpj:'11.222.333/0001-44',telefone:'(31) 95555-9999',email:'carlos@empresa.com.br',banco:'Itaú',pix:'11.222.333/0001-44',agencia:'5678',conta:'789012-3',cep:'30140-110',cidade:'Belo Horizonte',uf:'MG',endereco:'Av. Afonso Pena',numero:'300',cnh:'',valor_diaria:'250.00',valor_km:'2.00',obs:'PJ',status:'ativo'},
+  ];
+  const ws=XLSX.utils.json_to_sheet(ex);
+  ws['!cols']=[{wch:25},{wch:18},{wch:18},{wch:28},{wch:15},{wch:28},{wch:10},{wch:12},{wch:12},{wch:18},{wch:5},{wch:25},{wch:8},{wch:15},{wch:12},{wch:12},{wch:8},{wch:10}];
+  const inst=[['INSTRUÇÕES'],[''],['Campo','Obrigatório','Exemplo'],['nome','SIM','João Silva Santos'],['cpf_cnpj','não','123.456.789-00'],['telefone','não','(11) 98765-4321'],['email','não','joao@email.com'],['banco','não','Nubank'],['pix','não','123.456.789-00 ou email'],['agencia','não','0001'],['conta','não','12345-6'],['cep','não','01310-100'],['cidade','não','São Paulo'],['uf','não','SP'],['endereco','não','Av. Paulista'],['numero','não','1000'],['cnh','não','12345678900'],['valor_diaria','não','200.00'],['valor_km','não','1.50'],['obs','não','Texto livre'],['status','não','ativo ou inativo']];
+  const wsI=XLSX.utils.aoa_to_sheet(inst);wsI['!cols']=[{wch:15},{wch:12},{wch:30}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Prestadores');XLSX.utils.book_append_sheet(wb,wsI,'Instruções');
+  XLSX.writeFile(wb,'modelo_prestadores.xlsx');toast('Modelo baixado!','s');
+}
+
+// ══ PREVIEW + IMPORTAR PRESTADORES ══
+function prevPrest(){
+  const f=el('ip-f').files[0];const pv=el('ip-prev');const btn=el('ip-btn');
+  if(!f){pv.style.display='none';btn.disabled=true;btn.style.opacity='.5';return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(data.length<2)return;
+    const headers=data[0];const rows=data.slice(1).filter(r=>r.some(c=>c!==''));
+    el('ip-cnt').textContent=`${rows.length} linha${rows.length!==1?'s':''} para importar`;
+    el('ip-tbl').innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,5).map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    const nIdx=headers.findIndex(h=>String(h).toLowerCase()==='nome');
+    const sem=rows.filter(r=>nIdx===-1||!r[nIdx]);
+    const w=el('ip-warn');
+    if(sem.length){w.textContent=`⚠️ ${sem.length} linha(s) sem nome serão ignoradas`;w.style.display='block';}else w.style.display='none';
+    pv.style.display='block';btn.disabled=false;btn.style.opacity='1';
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+async function importPrests(){
+  const f=el('ip-f').files[0];if(!f){toast('Selecione um arquivo','e');return;}
+  const btn=el('ip-btn');btn.textContent='⏳ Importando...';btn.disabled=true;
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{defval:''});
+    const valid=data.filter(r=>r.nome&&String(r.nome).trim());
+    let ok=0,err=data.length-valid.length;
+    for(let i=0;i<valid.length;i+=50){
+      const batch=valid.slice(i,i+50).map(r=>({
+        nome:String(r.nome||'').trim(),cpf_cnpj:String(r.cpf_cnpj||'').trim()||null,
+        telefone:String(r.telefone||'').trim()||null,email:String(r.email||'').trim()||null,
+        banco:String(r.banco||'').trim()||null,pix:String(r.pix||'').trim()||null,
+        agencia:String(r.agencia||'').trim()||null,conta:String(r.conta||'').trim()||null,
+        cep:String(r.cep||'').trim()||null,cidade:String(r.cidade||'').trim()||null,
+        uf:String(r.uf||'').trim()||null,endereco:String(r.endereco||'').trim()||null,
+        numero:String(r.numero||'').trim()||null,cnh:String(r.cnh||'').trim()||null,
+        valor_diaria:r.valor_diaria||null,valor_km:r.valor_km||null,
+        obs:String(r.obs||'').trim()||null,
+        status:['ativo','inativo'].includes(String(r.status||'').toLowerCase())?String(r.status).toLowerCase():'ativo',
+      }));
+      const{error}=await sb.from('prestadores').insert(batch);
+      if(error)err+=batch.length;else ok+=batch.length;
+    }
+    toast(`✅ ${ok} importados${err>0?` · ⚠️ ${err} ignorados`:''}`,ok>0?'s':'e');
+    closeM('m-imp-prest');el('ip-f').value='';el('ip-prev').style.display='none';
+    btn.textContent='📥 Importar Prestadores';btn.disabled=true;btn.style.opacity='.5';
+    await fetchP();fillSels();loadPrestPage();
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+// ══ MODELO DIÁRIAS ══
+function dlModeloDiar(){
+  const p1=allP[0]?.nome||'João Silva Santos',p2=allP[1]?.nome||'Maria Oliveira Costa';
+  const o1=allO[0]?.nome||'Operação SP',o2=allO[1]?.nome||'Operação RJ';
+  const s1=allS[0]?.nome||'Entrega',s2=allS[1]?.nome||'Coleta';
+  const hoje=new Date();
+  const fdd=d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const ex=[
+    {data:fdd(hoje),prestador:p1,operacao:o1,servico:s1,placa:'ABC-1234',km_ini:15000,km_fim:15250,obs:'Entrega sem ocorrências'},
+    {data:fdd(new Date(hoje-86400000)),prestador:p1,operacao:o1,servico:s2,placa:'ABC-1234',km_ini:14750,km_fim:15000,obs:''},
+    {data:fdd(new Date(hoje-86400000*2)),prestador:p2,operacao:o2,servico:s1,placa:'XYZ-5678',km_ini:30100,km_fim:30380,obs:'Atraso por trânsito'},
+    {data:fdd(new Date(hoje-86400000*3)),prestador:p2,operacao:o2,servico:s2,placa:'XYZ-5678',km_ini:29820,km_fim:30100,obs:''},
+    {data:fdd(new Date(hoje-86400000*4)),prestador:p1,operacao:o1,servico:s1,placa:'DEF-9012',km_ini:8500,km_fim:8820,obs:''},
+  ];
+  const ws=XLSX.utils.json_to_sheet(ex);
+  ws['!cols']=[{wch:14},{wch:25},{wch:18},{wch:14},{wch:12},{wch:10},{wch:10},{wch:35}];
+  const ref=[['PRESTADORES','','OPERAÇÕES','','SERVIÇOS']];
+  const mx=Math.max(allP.length,allO.length,allS.length,5);
+  for(let i=0;i<mx;i++)ref.push([allP[i]?.nome||'','',allO[i]?.nome||'','',allS[i]?.nome||'']);
+  const wsR=XLSX.utils.aoa_to_sheet(ref);wsR['!cols']=[{wch:28},{wch:4},{wch:20},{wch:4},{wch:18}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Diárias');XLSX.utils.book_append_sheet(wb,wsR,'Referência');
+  XLSX.writeFile(wb,'modelo_diarias.xlsx');toast('Modelo baixado!','s');
+}
+
+// ══ PREVIEW + IMPORTAR DIÁRIAS ══
+function prevDiar(){
+  const f=el('id-f').files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(data.length<2)return;
+    const headers=data[0];const rows=data.slice(1).filter(r=>r.some(c=>c!==''));
+    el('id-cnt').textContent=`${rows.length} linha${rows.length!==1?'s':''} para importar`;
+    el('id-tbl').innerHTML=`<thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.slice(0,5).map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>`;
+    el('id-prev').style.display='block';
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+async function importDiar(){
+  const f=el('id-f').files[0];if(!f){toast('Selecione um arquivo','e');return;}
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const wb=XLSX.read(e.target.result,{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];
+    const data=XLSX.utils.sheet_to_json(ws,{defval:''});
+    if(!data.length){toast('Planilha vazia','e');return;}
+    let ok=0,err=0;
+    for(const row of data){
+      let dv=String(row.data||'').trim();
+      if(dv.includes('/')){const pts=dv.split('/');if(pts.length===3)dv=`${pts[2]}-${String(pts[1]).padStart(2,'0')}-${String(pts[0]).padStart(2,'0')}`;}
+      else dv=dv.substring(0,10);
+      const pr=allP.find(p=>p.nome.toLowerCase()===String(row.prestador||'').toLowerCase().trim());
+      const op=allO.find(o=>o.nome.toLowerCase()===String(row.operacao||'').toLowerCase().trim());
+      const sv=allS.find(s=>s.nome.toLowerCase()===String(row.servico||'').toLowerCase().trim());
+      const pl={data:dv||null,prestador_id:pr?.id||null,operacao_id:op?.id||null,servico_id:sv?.id||null,placa:String(row.placa||'').trim()||null,km_ini:row.km_ini||null,km_fim:row.km_fim||null,obs:String(row.obs||'').trim()||null,status:'pendente',usuario_id:CU.id||null};
+      if(!pl.data||!pl.prestador_id){err++;continue;}
+      const{error}=await sb.from('diarias').insert(pl);
+      if(error)err++;else ok++;
+    }
+    toast(`✅ ${ok} importadas${err>0?` · ⚠️ ${err} ignoradas`:''}`,ok>0?'s':'e');
+    closeM('m-imp-diar');el('id-f').value='';el('id-prev').style.display='none';
+    if(el('page-diarias').classList.contains('active'))loadDiarias();loadDashboard();
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+// ══ USUÁRIOS ══
+async function loadUsers(){
+  const tb=el('user-tb');tb.innerHTML='';
+  const{data}=await sb.from('usuarios').select('*').order('nome');
+  if(!data?.length){tb.innerHTML='<tr><td colspan="5"><div class="empty"><div class="eic">🔑</div><p>Nenhum usuário cadastrado</p></div></td></tr>';return;}
+  data.forEach(u=>{const tr=document.createElement('tr');tr.innerHTML=`<td>${u.nome}</td><td style="font-family:var(--mono)">${u.login}</td><td><span class="badge bbl">${u.perfil}</span></td><td><span class="badge ${u.status==='ativo'?'bgr':'bgy'}">${u.status}</span></td><td><button class="btn bd bsm bic" onclick="delUser('${u.id}')">🗑</button></td>`;tb.appendChild(tr);});
+}
+async function saveUser(){const pl={nome:el('u-nm').value,login:el('u-lg').value,senha:el('u-sn').value,perfil:el('u-pf').value,status:el('u-st').value};if(!pl.nome||!pl.login||!pl.senha){toast('Preencha todos os campos','e');return;}const{error}=await sb.from('usuarios').insert(pl);if(error){toast('Erro: '+error.message,'e');return;}toast('Usuário criado!','s');closeM('m-user');loadUsers();}
+async function delUser(id){if(!confirm('Excluir?'))return;await sb.from('usuarios').delete().eq('id',id);toast('Excluído','s');loadUsers();}
+
+// ══ CONFIGURAÇÕES ══
+async function loadConfig(){
+  const{data:ops}=await sb.from('operacoes').select('*').order('nome');
+  const{data:srvs}=await sb.from('servicos').select('*').order('nome');
+  el('ops-lst').innerHTML=(ops||[]).map(o=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:var(--bg2);border-radius:7px;margin-bottom:5px;font-size:13px"><span>${o.nome}</span><button class="btn bd bsm bic" onclick="delOp('${o.id}')">🗑</button></div>`).join('')||'<p style="color:var(--text2);font-size:12px">Nenhuma operação cadastrada</p>';
+  el('srvs-lst').innerHTML=(srvs||[]).map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:var(--bg2);border-radius:7px;margin-bottom:5px;font-size:13px"><span>${s.nome}</span><button class="btn bd bsm bic" onclick="delSrv('${s.id}')">🗑</button></div>`).join('')||'<p style="color:var(--text2);font-size:12px">Nenhum serviço cadastrado</p>';
+}
+async function addOp(){const n=el('nova-op').value.trim();if(!n)return;const{error}=await sb.from('operacoes').insert({nome:n});if(error){toast('Erro','e');return;}el('nova-op').value='';toast('Operação adicionada!','s');await fetchO();fillSels();loadConfig();}
+async function addSrv(){const n=el('novo-srv').value.trim();if(!n)return;const{error}=await sb.from('servicos').insert({nome:n});if(error){toast('Erro','e');return;}el('novo-srv').value='';toast('Serviço adicionado!','s');await fetchS();fillSels();loadConfig();}
+async function delOp(id){if(!confirm('Excluir?'))return;await sb.from('operacoes').delete().eq('id',id);await fetchO();fillSels();loadConfig();}
+async function delSrv(id){if(!confirm('Excluir?'))return;await sb.from('servicos').delete().eq('id',id);await fetchS();fillSels();loadConfig();}
+
+// ══ PDF ══
+async function pdfDiar(id){const{data}=await sb.from('diarias').select('*, prestadores(nome), operacoes(nome), servicos(nome)').eq('id',id).single();if(!data){toast('Não encontrada','e');return;}gerarPDF([data],data.prestadores?.nome||'Prestador','Diária Individual');}
+async function pdfPrest(prestId,nome){if(!selQ)return;const{data}=await sb.from('diarias').select('*, prestadores(nome), operacoes(nome), servicos(nome)').eq('prestador_id',prestId).gte('data',selQ.start).lte('data',selQ.end);if(!data){toast('Sem dados','e');return;}gerarPDF(data,nome,`Fechamento ${selQ.label}`);}
+async function gerarTodosPDFs(){if(!selQ){toast('Selecione uma quinzena','i');return;}const{data}=await sb.from('diarias').select('*, prestadores(nome), operacoes(nome), servicos(nome)').gte('data',selQ.start).lte('data',selQ.end);if(!data)return;const byP={};data.forEach(d=>{if(!byP[d.prestador_id])byP[d.prestador_id]={nome:d.prestadores?.nome,ds:[]};byP[d.prestador_id].ds.push(d);});let c=0;for(const{nome,ds}of Object.values(byP)){gerarPDF(ds,nome,`Fechamento ${selQ.label}`);c++;await new Promise(r=>setTimeout(r,300));}toast(`${c} PDFs gerados!`,'s');}
+
+function gerarPDF(diarias,prestador,titulo){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF();
+  doc.setFillColor(217,95,43);doc.rect(0,0,210,30,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(17);doc.setFont('helvetica','bold');doc.text('CONTROLE DE DIÁRIAS',14,18);
+  doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text(titulo,14,26);
+  doc.setTextColor(0,0,0);doc.setFontSize(11);doc.text(`Prestador: ${prestador}`,14,42);doc.text(`Emitido: ${new Date().toLocaleDateString('pt-BR')}`,14,50);
+  doc.autoTable({startY:58,head:[['Data','Operação','Serviço','Placa','KM Ini','KM Fim','Status']],body:diarias.map(d=>[d.data,d.operacoes?.nome||'—',d.servicos?.nome||'—',d.placa||'—',d.km_ini||'—',d.km_fim||'—',d.status]),theme:'striped',headStyles:{fillColor:[217,95,43],fontStyle:'bold'},styles:{fontSize:9}});
+  const fy=doc.lastAutoTable.finalY+20;
+  doc.setFontSize(10);doc.setFont('helvetica','bold');doc.text('DECLARAÇÃO DE AUTONOMIA',14,fy);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  doc.text(doc.splitTextToSize(`Eu, ${prestador}, declaro que os serviços descritos foram prestados conforme acordado, com total autonomia operacional, sem vínculo empregatício.`,180),14,fy+8);
+  doc.line(14,fy+35,100,fy+35);doc.text('Assinatura do Prestador',14,fy+40);
+  doc.save(`diarias_${prestador.replace(/\s+/g,'_')}.pdf`);toast('PDF gerado!','s');
+}
+
+// ══ EXCEL ══
+async function exportarExcel(){
+  if(!selQ){toast('Selecione uma quinzena no dashboard','i');return;}
+  const{data}=await sb.from('diarias').select('*, prestadores(nome), operacoes(nome), servicos(nome), usuarios(nome)').gte('data',selQ.start).lte('data',selQ.end);
+  if(!data){toast('Sem dados','e');return;}
+  const rows=data.map(d=>({Data:d.data,Prestador:d.prestadores?.nome||'',Operação:d.operacoes?.nome||'',Serviço:d.servicos?.nome||'',Placa:d.placa||'','KM Inicial':d.km_ini||'','KM Final':d.km_fim||'',Status:d.status,Usuário:d.usuarios?.nome||'',Observações:d.obs||''}));
+  const ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[{wch:12},{wch:25},{wch:20},{wch:18},{wch:12},{wch:10},{wch:10},{wch:12},{wch:18},{wch:30}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Diárias');
+  XLSX.writeFile(wb,`diarias_${selQ.label.replace(/\s+/g,'_')}.xlsx`);toast('Excel gerado!','s');
+}
+
+// ══ REALTIME ══
+function setupRT(){
+  rtCh=sb.channel('rt-changes').on('postgres_changes',{event:'*',schema:'public',table:'diarias'},()=>{
+    if(el('page-dashboard').classList.contains('active'))loadDashboard();
+    if(el('page-diarias').classList.contains('active'))loadDiarias();
+  }).subscribe();
+}
+
+// ══ NAV ══
+function showPage(name,nviEl){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nvi').forEach(n=>n.classList.remove('active'));
+  el('page-'+name)?.classList.add('active');
+  if(nviEl)nviEl.classList.add('active');
+  el('page-title').textContent={dashboard:'Dashboard',diarias:'Diárias',ocorrencias:'Ocorrências',multas:'Multas & Avarias',fechamento:'Fechamento Quinzenal',prestadores:'Prestadores',usuarios:'Usuários',configuracoes:'Configurações'}[name]||name;
+  const loaders={diarias:loadDiarias,ocorrencias:loadOcorr,multas:loadMult,fechamento:loadFech,prestadores:loadPrestPage,usuarios:loadUsers,configuracoes:loadConfig};
+  if(loaders[name])loaders[name]();
+}
+
+// ══ MODAIS ══
+function openM(id){const m=el(id);if(!m)return;m.style.display='flex';}
+function closeM(id){const m=el(id);if(m)m.style.display='none';}
+function closeOv(e,id){if(e.target===e.currentTarget)closeM(id);}
+
+// ══ HELPERS ══
+function el(id){return document.getElementById(id);}
+function bdg(s){const c={aprovada:'bgr',pendente:'byw',rejeitada:'brd',aberta:'byw',fechada:'bgr'}[s]||'bgy';return `<span class="badge ${c}">${s}</span>`;}
+function bdgC(s){return {aprovada:'bgr',pendente:'byw',rejeitada:'brd',pago:'bgr',contestado:'bbl',cancelado:'bgy'}[s]||'bgy';}
+function toast(msg,type='i'){const c=el('tct');const t=document.createElement('div');t.className=`toast t${type}`;t.textContent=msg;c.appendChild(t);setTimeout(()=>t.remove(),3200);}
+function toggleTheme(){const h=document.documentElement;const dark=h.getAttribute('data-theme')==='dark';h.setAttribute('data-theme',dark?'light':'dark');el('theme-btn').textContent=dark?'🌙 Escuro':'☀️ Claro';}
+function toggleSidebar(){el('sidebar').classList.toggle('open');}
+function toggleFab(){fabOpen=!fabOpen;el('fabmenu').style.display=fabOpen?'flex':'none';el('fab').textContent=fabOpen?'✕':'+';}
+
+// ══ KEYBOARD ══
+function setupKeys(){
+  document.addEventListener('keydown',e=>{
+    if(e.ctrlKey&&e.key==='Enter'){if(el('m-diar').style.display!=='none')saveDiaria();else if(el('m-ocorr').style.display!=='none')saveOcorr();}
+    if(e.altKey&&e.key==='n')toggleFab();
+    if(e.altKey&&e.key==='d')abrirModalDiaria();
+    if(e.key==='Escape'){document.querySelectorAll('.moverlay').forEach(m=>m.style.display='none');if(fabOpen)toggleFab();}
+  });
+}
+
+// ══ RESPONSIVE ══
+if(window.innerWidth<768)el('menu-toggle').style.display='flex';
+window.addEventListener('resize',()=>{el('menu-toggle').style.display=window.innerWidth<768?'flex':'none';if(window.innerWidth>=768)el('sidebar').classList.remove('open');});
+</script>
+</body>
+</html>
