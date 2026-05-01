@@ -438,8 +438,8 @@ tr:hover td{background:var(--bg2)}
       </div>
       <!-- DADOS -->
       <div id="tab-dados">
-        <div class="fg"><label>Nome Completo *</label><input type="text" id="p-nm" placeholder="Nome completo do prestador"></div>
-        <div class="fr"><div class="fg"><label>CPF / CNPJ</label><input type="text" id="p-doc" placeholder="000.000.000-00"></div><div class="fg"><label>Nascimento</label><input type="date" id="p-nasc"></div></div>
+        <div class="fg"><label>Nome Completo *</label><input type="text" id="p-nm" placeholder="Nome completo do prestador" style="border-color:var(--accent)"></div>
+        <div class="fr"><div class="fg"><label>CPF / CNPJ *</label><input type="text" id="p-doc" placeholder="000.000.000-00" style="border-color:var(--accent)"></div><div class="fg"><label>Nascimento</label><input type="date" id="p-nasc"></div></div>
         <div class="fr"><div class="fg"><label>Telefone / WhatsApp</label><input type="text" id="p-tel" placeholder="(00) 00000-0000"></div><div class="fg"><label>Email</label><input type="email" id="p-em" placeholder="email@exemplo.com"></div></div>
         <div class="fr"><div class="fg"><label>Nº CNH</label><input type="text" id="p-cnh" placeholder="Número CNH"></div><div class="fg"><label>Categoria CNH</label><select id="p-ccat"><option value="">—</option><option>A</option><option>B</option><option>AB</option><option>C</option><option>D</option><option>E</option></select></div></div>
         <div class="fr"><div class="fg"><label>Status</label><select id="p-st"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select></div><div class="fg"><label>Observações</label><input type="text" id="p-ob" placeholder="Observações gerais"></div></div>
@@ -808,24 +808,55 @@ async function buscaCEP(cep){
 
 async function savePrest(){
   const id=el('p-id').value;
+  const nome=el('p-nm').value.trim();
+  const doc=el('p-doc').value.trim();
+  if(!nome){toast('Nome obrigatório','e');return;}
+  if(!doc){toast('CPF/CNPJ obrigatório','e');return;}
+
+  // Tenta primeiro com todos os campos
   const pl={
-    nome:el('p-nm').value.trim(),cpf_cnpj:el('p-doc').value.trim()||null,
-    telefone:el('p-tel').value.trim()||null,email:el('p-em').value.trim()||null,
-    nascimento:el('p-nasc').value||null,cnh:el('p-cnh').value.trim()||null,
-    cnh_categoria:el('p-ccat').value||null,cep:el('p-cep').value.trim()||null,
-    uf:el('p-uf').value.trim()||null,cidade:el('p-cid').value.trim()||null,
-    bairro:el('p-bai').value.trim()||null,endereco:el('p-rua').value.trim()||null,
-    numero:el('p-num').value.trim()||null,complemento:el('p-cmp').value.trim()||null,
-    banco:el('p-ban').value.trim()||null,tipo_conta:el('p-tct').value||null,
-    agencia:el('p-ag').value.trim()||null,conta:el('p-ct').value.trim()||null,
-    pix:el('p-pix').value.trim()||null,valor_diaria:el('p-vd').value||null,
-    valor_km:el('p-vkm').value||null,obs:el('p-ob').value.trim()||null,
-    status:el('p-st').value,
+    nome, status:el('p-st').value,
+    cpf_cnpj:el('p-doc').value.trim()||null,
+    telefone:el('p-tel').value.trim()||null,
+    email:el('p-em').value.trim()||null,
+    nascimento:el('p-nasc').value||null,
+    cnh:el('p-cnh').value.trim()||null,
+    cnh_categoria:el('p-ccat').value||null,
+    cep:el('p-cep').value.trim()||null,
+    uf:el('p-uf').value.trim()||null,
+    cidade:el('p-cid').value.trim()||null,
+    bairro:el('p-bai').value.trim()||null,
+    endereco:el('p-rua').value.trim()||null,
+    numero:el('p-num').value.trim()||null,
+    complemento:el('p-cmp').value.trim()||null,
+    banco:el('p-ban').value.trim()||null,
+    tipo_conta:el('p-tct').value||null,
+    agencia:el('p-ag').value.trim()||null,
+    conta:el('p-ct').value.trim()||null,
+    pix:el('p-pix').value.trim()||null,
+    valor_diaria:el('p-vd').value||null,
+    valor_km:el('p-vkm').value||null,
+    obs:el('p-ob').value.trim()||null,
   };
-  if(!pl.nome){toast('Nome obrigatório','e');return;}
-  const{error}=id?await sb.from('prestadores').update(pl).eq('id',id):await sb.from('prestadores').insert(pl);
+  // Remove nulls
+  Object.keys(pl).forEach(k=>{if(pl[k]===null||pl[k]==='')delete pl[k];});
+  pl.nome=nome; pl.status=el('p-st').value;
+
+  let error;
+  ({error}=id ? await sb.from('prestadores').update(pl).eq('id',id) : await sb.from('prestadores').insert(pl));
+
+  // Se falhou por coluna inexistente, tenta só com campos básicos da tabela original
+  if(error && (error.message.includes('column')||error.message.includes('schema')||error.message.includes('cache'))){
+    const basico={nome, status:el('p-st').value};
+    if(el('p-doc').value.trim()) basico.cpf_cnpj=el('p-doc').value.trim();
+    if(el('p-tel').value.trim()) basico.telefone=el('p-tel').value.trim();
+    if(el('p-em').value.trim()) basico.email=el('p-em').value.trim();
+    ({error}=id ? await sb.from('prestadores').update(basico).eq('id',id) : await sb.from('prestadores').insert(basico));
+    if(!error) toast('Salvo! Para guardar dados bancários/endereço, adicione as colunas no Supabase.','i');
+  }
+
   if(error){toast('Erro: '+error.message,'e');return;}
-  toast(id?'Prestador atualizado!':'Prestador cadastrado!','s');
+  else toast(id?'Prestador atualizado!':'Prestador cadastrado!','s');
   closeM('m-prest');await fetchP();fillSels();loadPrestPage();
 }
 
@@ -901,8 +932,17 @@ async function importPrests(){
         obs:String(r.obs||'').trim()||null,
         status:['ativo','inativo'].includes(String(r.status||'').toLowerCase())?String(r.status).toLowerCase():'ativo',
       }));
-      const{error}=await sb.from('prestadores').insert(batch);
-      if(error)err+=batch.length;else ok+=batch.length;
+      // Remove campos null para evitar erro de coluna inexistente
+      const batchLimpo=batch.map(row=>Object.fromEntries(Object.entries(row).filter(([,v])=>v!==null&&v!=='')));
+      batchLimpo.forEach(row=>{if(!row.status)row.status='ativo';});
+      let bErr;
+      ({error:bErr}=await sb.from('prestadores').insert(batchLimpo));
+      // fallback: só campos básicos
+      if(bErr&&(bErr.message.includes('column')||bErr.message.includes('schema')||bErr.message.includes('cache'))){
+        const batchBasico=batch.map(r=>({nome:r.nome,cpf_cnpj:r.cpf_cnpj||null,telefone:r.telefone||null,email:r.email||null,status:r.status||'ativo'})).map(r=>Object.fromEntries(Object.entries(r).filter(([,v])=>v)));
+        ({error:bErr}=await sb.from('prestadores').insert(batchBasico));
+      }
+      if(bErr)err+=batch.length;else ok+=batch.length;
     }
     toast(`✅ ${ok} importados${err>0?` · ⚠️ ${err} ignorados`:''}`,ok>0?'s':'e');
     closeM('m-imp-prest');el('ip-f').value='';el('ip-prev').style.display='none';
