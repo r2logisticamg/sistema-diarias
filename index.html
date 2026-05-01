@@ -807,57 +807,64 @@ async function buscaCEP(cep){
 }
 
 async function savePrest(){
-  const id=el('p-id').value;
-  const nome=el('p-nm').value.trim();
-  const doc=el('p-doc').value.trim();
-  if(!nome){toast('Nome obrigatório','e');return;}
-  if(!doc){toast('CPF/CNPJ obrigatório','e');return;}
+  try {
+    const id=el('p-id').value;
+    const nome=el('p-nm').value.trim();
+    const doc=el('p-doc').value.trim();
+    if(!nome){toast('Nome obrigatório','e');return;}
+    if(!doc){toast('CPF/CNPJ obrigatório','e');return;}
 
-  // Tenta primeiro com todos os campos
-  const pl={
-    nome, status:el('p-st').value,
-    cpf_cnpj:el('p-doc').value.trim()||null,
-    telefone:el('p-tel').value.trim()||null,
-    email:el('p-em').value.trim()||null,
-    nascimento:el('p-nasc').value||null,
-    cnh:el('p-cnh').value.trim()||null,
-    cnh_categoria:el('p-ccat').value||null,
-    cep:el('p-cep').value.trim()||null,
-    uf:el('p-uf').value.trim()||null,
-    cidade:el('p-cid').value.trim()||null,
-    bairro:el('p-bai').value.trim()||null,
-    endereco:el('p-rua').value.trim()||null,
-    numero:el('p-num').value.trim()||null,
-    complemento:el('p-cmp').value.trim()||null,
-    banco:el('p-ban').value.trim()||null,
-    tipo_conta:el('p-tct').value||null,
-    agencia:el('p-ag').value.trim()||null,
-    conta:el('p-ct').value.trim()||null,
-    pix:el('p-pix').value.trim()||null,
-    valor_diaria:el('p-vd').value||null,
-    valor_km:el('p-vkm').value||null,
-    obs:el('p-ob').value.trim()||null,
-  };
-  // Remove nulls
-  Object.keys(pl).forEach(k=>{if(pl[k]===null||pl[k]==='')delete pl[k];});
-  pl.nome=nome; pl.status=el('p-st').value;
+    // Monta payload só com campos básicos garantidos
+    const pl={nome, cpf_cnpj:doc, status:el('p-st').value};
+    const opcionais={
+      telefone:el('p-tel').value.trim(),
+      email:el('p-em').value.trim(),
+      nascimento:el('p-nasc').value,
+      cnh:el('p-cnh').value.trim(),
+      cnh_categoria:el('p-ccat').value,
+      cep:el('p-cep').value.trim(),
+      uf:el('p-uf').value.trim(),
+      cidade:el('p-cid').value.trim(),
+      bairro:el('p-bai').value.trim(),
+      endereco:el('p-rua').value.trim(),
+      numero:el('p-num').value.trim(),
+      complemento:el('p-cmp').value.trim(),
+      banco:el('p-ban').value.trim(),
+      tipo_conta:el('p-tct').value,
+      agencia:el('p-ag').value.trim(),
+      conta:el('p-ct').value.trim(),
+      pix:el('p-pix').value.trim(),
+      valor_diaria:el('p-vd').value,
+      valor_km:el('p-vkm').value,
+      obs:el('p-ob').value.trim(),
+    };
+    Object.entries(opcionais).forEach(([k,v])=>{ if(v) pl[k]=v; });
 
-  let error;
-  ({error}=id ? await sb.from('prestadores').update(pl).eq('id',id) : await sb.from('prestadores').insert(pl));
+    // Tenta salvar com todos os campos
+    let res = id
+      ? await sb.from('prestadores').update(pl).eq('id',id)
+      : await sb.from('prestadores').insert(pl);
 
-  // Se falhou por coluna inexistente, tenta só com campos básicos da tabela original
-  if(error && (error.message.includes('column')||error.message.includes('schema')||error.message.includes('cache'))){
-    const basico={nome, status:el('p-st').value};
-    if(el('p-doc').value.trim()) basico.cpf_cnpj=el('p-doc').value.trim();
-    if(el('p-tel').value.trim()) basico.telefone=el('p-tel').value.trim();
-    if(el('p-em').value.trim()) basico.email=el('p-em').value.trim();
-    ({error}=id ? await sb.from('prestadores').update(basico).eq('id',id) : await sb.from('prestadores').insert(basico));
-    if(!error) toast('Salvo! Para guardar dados bancários/endereço, adicione as colunas no Supabase.','i');
+    // Se erro de coluna inexistente, tenta só com básicos
+    if(res.error && (res.error.message.includes('column')||res.error.message.includes('schema')||res.error.message.includes('cache'))){
+      const basico={nome, cpf_cnpj:doc, status:el('p-st').value};
+      if(el('p-tel').value.trim()) basico.telefone=el('p-tel').value.trim();
+      if(el('p-em').value.trim()) basico.email=el('p-em').value.trim();
+      res = id
+        ? await sb.from('prestadores').update(basico).eq('id',id)
+        : await sb.from('prestadores').insert(basico);
+      if(!res.error) toast('Salvo com campos básicos. Rode o SQL no Supabase para habilitar todos os campos.','i');
+    }
+
+    if(res.error){toast('Erro: '+res.error.message,'e');return;}
+    toast(id?'Prestador atualizado!':'Prestador cadastrado!','s');
+    closeM('m-prest');
+    await fetchP();
+    fillSels();
+    loadPrestPage();
+  } catch(e){
+    toast('Erro inesperado: '+e.message,'e');
   }
-
-  if(error){toast('Erro: '+error.message,'e');return;}
-  else toast(id?'Prestador atualizado!':'Prestador cadastrado!','s');
-  closeM('m-prest');await fetchP();fillSels();loadPrestPage();
 }
 
 function editPrest(p){
