@@ -806,6 +806,30 @@ async function buscaCEP(cep){
   el('p-rua').value=d.logradouro||'';el('p-bai').value=d.bairro||'';el('p-cid').value=d.localidade||'';el('p-uf').value=d.uf||'';}catch{}
 }
 
+// Colunas confirmadas da tabela prestadores (descobertas automaticamente)
+let colsPrest = null;
+
+async function getColsPrest(){
+  if(colsPrest) return colsPrest;
+  try {
+    // Busca uma linha para descobrir quais colunas existem
+    const {data} = await sb.from('prestadores').select('*').limit(1);
+    if(data && data.length>0){
+      colsPrest = Object.keys(data[0]);
+    } else {
+      // Tabela vazia: tenta insert mínimo e vê o erro para descobrir colunas
+      colsPrest = ['id','nome','status','created_at'];
+    }
+  } catch(e){ colsPrest = ['id','nome','status']; }
+  return colsPrest;
+}
+
+function filtrarCols(obj, cols){
+  const r={};
+  Object.entries(obj).forEach(([k,v])=>{ if(cols.includes(k) && v!==null && v!==undefined && v!=='') r[k]=v; });
+  return r;
+}
+
 async function savePrest(){
   try {
     const id=el('p-id').value;
@@ -814,9 +838,11 @@ async function savePrest(){
     if(!nome){toast('Nome obrigatório','e');return;}
     if(!doc){toast('CPF/CNPJ obrigatório','e');return;}
 
-    // Monta payload só com campos básicos garantidos
-    const pl={nome, cpf_cnpj:doc, status:el('p-st').value};
-    const opcionais={
+    // Todos os campos possíveis
+    const tudo={
+      nome,
+      cpf_cnpj:doc,
+      status:el('p-st').value||'ativo',
       telefone:el('p-tel').value.trim(),
       email:el('p-em').value.trim(),
       nascimento:el('p-nasc').value,
@@ -834,26 +860,32 @@ async function savePrest(){
       agencia:el('p-ag').value.trim(),
       conta:el('p-ct').value.trim(),
       pix:el('p-pix').value.trim(),
-      valor_diaria:el('p-vd').value,
-      valor_km:el('p-vkm').value,
+      valor_diaria:el('p-vd').value||null,
+      valor_km:el('p-vkm').value||null,
       obs:el('p-ob').value.trim(),
     };
-    Object.entries(opcionais).forEach(([k,v])=>{ if(v) pl[k]=v; });
 
-    // Tenta salvar com todos os campos
+    // Descobre colunas que existem na tabela
+    const cols = await getColsPrest();
+
+    // Filtra só o que a tabela aceita
+    const pl = filtrarCols(tudo, cols);
+    // nome e status sempre obrigatórios
+    pl.nome = nome;
+    pl.status = tudo.status;
+
     let res = id
       ? await sb.from('prestadores').update(pl).eq('id',id)
       : await sb.from('prestadores').insert(pl);
 
-    // Se erro de coluna inexistente, tenta só com básicos
+    // Se ainda der erro de coluna, tenta só com nome e status
     if(res.error && (res.error.message.includes('column')||res.error.message.includes('schema')||res.error.message.includes('cache'))){
-      const basico={nome, cpf_cnpj:doc, status:el('p-st').value};
-      if(el('p-tel').value.trim()) basico.telefone=el('p-tel').value.trim();
-      if(el('p-em').value.trim()) basico.email=el('p-em').value.trim();
+      colsPrest = null; // reseta cache
+      const mini={nome, status:tudo.status};
       res = id
-        ? await sb.from('prestadores').update(basico).eq('id',id)
-        : await sb.from('prestadores').insert(basico);
-      if(!res.error) toast('Salvo com campos básicos. Rode o SQL no Supabase para habilitar todos os campos.','i');
+        ? await sb.from('prestadores').update(mini).eq('id',id)
+        : await sb.from('prestadores').insert(mini);
+      if(!res.error) toast('Salvo! Rode o SQL no Supabase para habilitar todos os campos.','i');
     }
 
     if(res.error){toast('Erro: '+res.error.message,'e');return;}
