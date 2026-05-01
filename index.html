@@ -389,7 +389,7 @@ tr:hover td{background:var(--bg2)}
       <div class="fr"><div class="fg"><label>Prestador *</label><select id="d-pr"></select></div><div class="fg"><label>Operação *</label><select id="d-op"></select></div></div>
       <div class="fr"><div class="fg"><label>Serviço</label><select id="d-sv"></select></div><div class="fg"><label>Data *</label><input type="date" id="d-dt"></div></div>
       <div class="fr"><div class="fg"><label>Placa</label><input type="text" id="d-pl" placeholder="ABC-1234" maxlength="8"></div><div class="fg"><label>Status</label><select id="d-st"><option value="pendente">Pendente</option><option value="aprovada">Aprovada</option><option value="rejeitada">Rejeitada</option></select></div></div>
-      <div class="fr"><div class="fg"><label>KM Inicial</label><input type="number" id="d-ki" placeholder="0"></div><div class="fg"><label>KM Final</label><input type="number" id="d-kf" placeholder="0"></div></div>
+
       <div class="fg"><label>Observações</label><textarea id="d-ob"></textarea></div>
       <div class="kh">💡 <span class="kbd">Ctrl+Enter</span> para salvar</div>
     </div>
@@ -668,10 +668,41 @@ function abrirModalDiaria(){clearDiarForm();openM('m-diar');}
 
 async function saveDiaria(){
   const id=el('d-id').value;
-  const pl={prestador_id:el('d-pr').value,operacao_id:el('d-op').value,servico_id:el('d-sv').value||null,data:el('d-dt').value,placa:el('d-pl').value||null,status:el('d-st').value,km_ini:el('d-ki').value||null,km_fim:el('d-kf').value||null,obs:el('d-ob').value||null,usuario_id:CU.id||null};
-  if(!pl.prestador_id||!pl.operacao_id||!pl.data){toast('Preencha os campos obrigatórios','e');return;}
-  const{error}=id?await sb.from('diarias').update(pl).eq('id',id):await sb.from('diarias').insert(pl);
-  if(error){toast('Erro: '+error.message,'e');return;}
+  const prestId=el('d-pr').value;
+  const prestNome=el('d-pr').options[el('d-pr').selectedIndex]?.text||'';
+  const opNome=el('d-op').options[el('d-op').selectedIndex]?.text||'';
+  if(!prestId||!el('d-op').value||!el('d-dt').value){toast('Preencha os campos obrigatórios','e');return;}
+
+  // Monta com todos os campos possíveis
+  const tudo={
+    prestador_id:prestId,
+    prestador_nome:prestNome,
+    operacao_id:el('d-op').value,
+    operacao_nome:opNome,
+    servico_id:el('d-sv').value||null,
+    data:el('d-dt').value,
+    placa:el('d-pl').value||null,
+    status:el('d-st').value,
+    obs:el('d-ob').value||null,
+    usuario_id:CU.id||null,
+  };
+
+  // Remove nulls
+  const pl=Object.fromEntries(Object.entries(tudo).filter(([,v])=>v!==null&&v!==''));
+
+  let res=id?await sb.from('diarias').update(pl).eq('id',id):await sb.from('diarias').insert(pl);
+
+  // Se erro de coluna, tenta sem colunas extras
+  if(res.error&&(res.error.message.includes('column')||res.error.message.includes('schema')||res.error.message.includes('cache'))){
+    const mini={prestador_nome:prestNome,data:el('d-dt').value,status:el('d-st').value};
+    if(prestId) mini.prestador_id=prestId;
+    if(el('d-op').value) mini.operacao_id=el('d-op').value;
+    if(el('d-pl').value) mini.placa=el('d-pl').value;
+    if(el('d-ob').value) mini.obs=el('d-ob').value;
+    res=id?await sb.from('diarias').update(mini).eq('id',id):await sb.from('diarias').insert(mini);
+  }
+
+  if(res.error){toast('Erro: '+res.error.message,'e');return;}
   toast('Diária salva!','s');closeM('m-diar');clearDiarForm();
   if(el('page-diarias').classList.contains('active'))loadDiarias();
   loadDashboard();
@@ -680,13 +711,13 @@ async function saveDiaria(){
 function editDiar(d){
   el('d-id').value=d.id;el('d-pr').value=d.prestador_id||'';el('d-op').value=d.operacao_id||'';el('d-sv').value=d.servico_id||'';
   el('d-dt').value=d.data||'';el('d-pl').value=d.placa||'';el('d-st').value=d.status||'pendente';
-  el('d-ki').value=d.km_ini||'';el('d-kf').value=d.km_fim||'';el('d-ob').value=d.obs||'';
+  el('d-ob').value=d.obs||'';
   el('m-diar-tit').textContent='Editar Diária';openM('m-diar');
 }
 
 function clearDiarForm(){
   el('d-id').value='';el('m-diar-tit').textContent='Nova Diária';
-  ['d-pr','d-op','d-sv','d-pl','d-ob','d-ki','d-kf'].forEach(id=>{const e=el(id);if(e)e.value='';});
+  ['d-pr','d-op','d-sv','d-pl','d-ob'].forEach(id=>{const e=el(id);if(e)e.value='';});
   el('d-st').value='pendente';el('d-dt').value=new Date().toISOString().split('T')[0];
 }
 
